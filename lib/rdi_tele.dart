@@ -4,6 +4,8 @@ import 'package:rdi_tele/models/cit_model.dart';
 import 'package:rdi_tele/rdi_tele_method_channel.dart';
 import 'package:rdi_tele/use_connectivity.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:rdi_tele/use_constant.dart';
 import 'package:rdi_tele/use_location.dart';
 import 'package:rdi_tele/use_services.dart';
 import 'package:rdi_tele/use_tele.dart';
@@ -11,8 +13,9 @@ import 'package:rdi_tele/use_tele.dart';
 import 'rdi_tele_platform_interface.dart';
 import 'package:dart_ping/dart_ping.dart';
 import 'package:background_fetch/background_fetch.dart';
-import 'package:flutter_speedtest/flutter_speedtest.dart';
+// import 'package:flutter_speedtest/flutter_speedtest.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_internet_speed_test/flutter_internet_speed_test.dart';
 
 import 'package:intl/intl.dart';
 
@@ -21,12 +24,15 @@ class RdiTele {
   final _rdiTelePlugin = MethodChannelRdiTele();
   final _useTele = UseTele();
 
-  final _speedtest = FlutterSpeedtest(
-    pathUpload: '/upload',
-    pathDownload: '/download',
-    pathResponseTime: '/ping',
-    baseUrl: 'https://speedtest.gsmnet.id.prod.hosts.ooklaserver.net:8080',
-  );
+  // final _speedtest = FlutterSpeedtest(
+  //   pathUpload: '/upload',
+  //   pathDownload: '/download',
+  //   pathResponseTime: '/ping',
+  //   baseUrl: 'https://speedtest.gsmnet.id.prod.hosts.ooklaserver.net:8080',
+  // );
+
+  final internetSpeedTest =
+      FlutterInternetSpeedTest(); //FlutterInternetSpeedTest()..enableLog();
 
   String resCqi = '0';
   String resSignalQuality = '0';
@@ -137,21 +143,58 @@ class RdiTele {
 
   void todo() async {
     await pingTest();
-    flutterSpeedTest();
+    // flutterSpeedTest();
+    internetSpeedTestPlugin();
 
     String connect = await UseConnectivity().checkConnectivity();
     print("$TAG : checkConnectivity $connect");
 
     Position position = await UseLocation().getGeoLocationPosition();
     print("[$TAG], Lat: ${position.latitude} , Long: ${position.longitude}");
+
+    resLat = position.latitude.toString();
+    resLng = position.longitude.toString();
+
+    List<Placemark> placemarks =
+        await placemarkFromCoordinates(position.latitude, position.longitude);
+    // print(placemarks);
+    Placemark place = placemarks[0];
+    var loc =
+        '${place.subLocality}, ${place.locality}, ${place.subAdministrativeArea}, ${place.administrativeArea}, ${place.country}';
+    print('[$TAG], $loc');
+
+    resAddress = loc;
+
     print("[BackgroundFetch] : dataActivity ${_useTele.dataActivity}");
 
     if (Platform.isAndroid) {
-      // print("$TAG : operatorName ${useTele.operatorName}");
+      print("$TAG : operatorName ${_useTele.operatorName}");
       Map<dynamic, dynamic> deviceInfo = await _rdiTelePlugin.getDeviceInfo();
       Map<dynamic, dynamic> tmChanel = await _rdiTelePlugin.getTM();
       print("[$TAG] getUuid $deviceInfo");
+
+      resUuid = deviceInfo[UseDeviceInfoConst.myProduct];
+      resBrand = deviceInfo[UseDeviceInfoConst.myBrand];
+      resDevice = deviceInfo[UseDeviceInfoConst.myDevice];
+      resModel = deviceInfo[UseDeviceInfoConst.myDeviceModel];
+
+      resNetworkType = _useTele.networkType;
+
+      var operatorNameSplit = _useTele.operatorName.split("-");
+      resNetworkOperator = operatorNameSplit[0];
+
+      resUuid = _useTele.uuid;
+      resCellId = _useTele.uuid;
+
       print("[$TAG] $tmChanel");
+
+      resCqi = tmChanel[UseTMConst.cqi].toString();
+      resRsrq = tmChanel[UseTMConst.rsrq].toString();
+      resSignalStrength = tmChanel[UseTMConst.dbm].toString();
+      resSignalQuality = tmChanel[UseTMConst.rsrq].toString();
+      resRsrp = tmChanel[UseTMConst.rsrp].toString();
+      resRssi = tmChanel[UseTMConst.rssi].toString();
+      resRssnr = tmChanel[UseTMConst.rssnr].toString();
     }
   }
 
@@ -189,6 +232,9 @@ class RdiTele {
           print(
               "RT  sum $sum / length ${listPing.length}  = ${sum / listPing.length}");
           print("Jitter Max $max -  Min $min  = ${max - min} ");
+
+          resRtPing = (sum / listPing.length).toString();
+          resJitter = (max - min).toString();
         }
       });
     } catch (e) {}
@@ -199,66 +245,123 @@ class RdiTele {
   int stepsDown = 0;
   int stepsUp = 0;
 
-  flutterSpeedTest() {
-    _speedtest.getDataspeedtest(
-      downloadOnProgress: ((percent, transferRate) {
-        String cdate = DateFormat("HH:mm:ss").format(DateTime.now());
-        var proggress = transferRate.toStringAsFixed(2);
-        print(
-            '[$TAG][$cdate] :  download percent ${(percent * 100).round()}%, transferrate $proggress');
-        downloadRate += transferRate;
-        stepsDown++;
-      }),
-      uploadOnProgress: ((percent, transferRate) {
-        String cdate = DateFormat("HH:mm:ss").format(DateTime.now());
-        var proggress = transferRate.toStringAsFixed(2);
-        print(
-            '[$TAG][$cdate] :  upload percent ${(percent * 100).round()}%, transferrate $proggress');
+  double _downloadRate = 0;
+  double _uploadRate = 0;
+  String _downloadProgress = '0';
+  String _uploadProgress = '0';
+  int _downloadCompletionTime = 0;
+  int _uploadCompletionTime = 0;
+  bool _isServerSelectionInProgress = false;
+  String _unitText = 'Mb/s';
 
-        uploadRate += transferRate;
-        stepsUp++;
-      }),
-      progressResponse: ((responseTime, jitter) {
-        String cdate = DateFormat("HH:mm:ss").format(DateTime.now());
+  String? _ip;
+  String? _asn;
+  String? _isp;
+
+  internetSpeedTestPlugin() async {
+    reset();
+    await internetSpeedTest.startTesting(
+      onStarted: () {
+        reset();
+        print('onStarted');
+      },
+      onCompleted: (TestResult download, TestResult upload) {
         print(
-            '[$TAG][$cdate] : progressResponse ping $responseTime, jitter $jitter');
-      }),
-      onError: ((errorMessage) {
-        String cdate = DateFormat("HH:mm:ss").format(DateTime.now());
-        print('[$TAG][$cdate] : onError  $errorMessage');
-      }),
-      onDone: () {
-        String cdate = DateFormat("HH:mm:ss").format(DateTime.now());
-        print('[$TAG][$cdate] : onDone');
-        print('[$TAG][$cdate] : total downloadrate $downloadRate');
-        print('[$TAG][$cdate] : total steps $stepsDown');
-        print('[$TAG][$cdate] : average ${downloadRate / stepsDown}');
-        print('[$TAG][$cdate] : total uploadrate $uploadRate');
-        print('[$TAG][$cdate] : total steps $stepsUp');
-        print('[$TAG][$cdate] : average ${uploadRate / stepsUp}');
+            'the transfer rate ${download.transferRate}, ${upload.transferRate}');
 
-        var resDownload = (downloadRate / stepsDown).toStringAsFixed(2);
-        print('[$TAG][$cdate] : resdownload $resDownload');
+        _downloadRate = download.transferRate;
+        _unitText = download.unit == SpeedUnit.Kbps ? 'Kb/s' : 'Mb/s';
+        _downloadProgress = '100';
+        _downloadCompletionTime = download.durationInMillis;
 
-        var resUpload = (uploadRate / stepsUp).toStringAsFixed(2);
-        print('[$TAG][$cdate] : resUpload $resUpload');
+        _uploadRate = upload.transferRate;
+        _unitText = upload.unit == SpeedUnit.Kbps ? 'Kb/s' : 'Mb/s';
+        _uploadProgress = '100';
+        _uploadCompletionTime = upload.durationInMillis;
+
+        resDownload = (downloadRate / stepsDown).toStringAsFixed(2);
+        print('[$TAG] : resdownload $resDownload');
+
+        resUpload = (uploadRate / stepsUp).toStringAsFixed(2);
+        print('[$TAG] : resUpload $resUpload');
 
         storeToCit();
       },
-      // isDone: (bool isDone) {
-      //   String cdate = DateFormat("HH:mm:ss").format(DateTime.now());
+      onProgress: (double percent, TestResult data) {
+        _unitText = data.unit == SpeedUnit.Kbps ? 'Kb/s' : 'Mb/s';
+        if (data.type == TestType.DOWNLOAD) {
+          _downloadRate = data.transferRate;
+          _downloadProgress = percent.toStringAsFixed(2);
+          stepsDown++;
+          downloadRate += _downloadRate;
 
-      //   print('[SpeedTest][$cdate] : onIsDone $isDone');
-      //   print('[SpeedTest][$cdate] : total downloadrate $downloadRate');
-      //   print('[SpeedTest][$cdate] : total steps $stepsDown');
-      //   print('[SpeedTest][$cdate] : average ${downloadRate / stepsDown}');
+          print(
+              'Download : the transfer rate $_downloadRate, the percent $_downloadProgress');
+        } else {
+          _uploadRate = data.transferRate;
+          _uploadProgress = percent.toStringAsFixed(2);
+          stepsUp++;
+          uploadRate += _uploadRate;
 
-      //   if (isDone) {
-      //     resDownload = (downloadRate / stepsDown).toStringAsFixed(2);
+          print(
+              'Upload : the transfer rate $_uploadRate, the percent $_uploadProgress');
+        }
+      },
+      onError: (String errorMessage, String speedTestError) {
+        print(
+            'the errorMessage $errorMessage, the speedTestError $speedTestError');
 
-      //   }
-      // },
+        reset();
+      },
+      onDefaultServerSelectionInProgress: () {
+        _isServerSelectionInProgress = true;
+
+        print('onDefaultServerSelectionInProgress');
+      },
+      onDefaultServerSelectionDone: (Client? client) {
+        print('onDefaultServerSelectionDone');
+
+        _isServerSelectionInProgress = false;
+        _ip = client?.ip;
+        _asn = client?.asn;
+        _isp = client?.isp;
+      },
+      onDownloadComplete: (TestResult data) {
+        _downloadRate = data.transferRate;
+        _unitText = data.unit == SpeedUnit.Kbps ? 'Kb/s' : 'Mb/s';
+        _downloadCompletionTime = data.durationInMillis;
+
+        print('[$TAG] : average ${downloadRate / stepsDown}');
+
+        print(
+            'onDownloadComplete : the transfer rate $_downloadRate, the percent $_downloadCompletionTime step $stepsDown');
+      },
+      onUploadComplete: (TestResult data) {
+        _uploadRate = data.transferRate;
+        _unitText = data.unit == SpeedUnit.Kbps ? 'Kb/s' : 'Mb/s';
+        _uploadCompletionTime = data.durationInMillis;
+
+        print('[$TAG] : average ${uploadRate / stepsUp}');
+
+        print(
+            'onUploadComplete : the transfer rate $_uploadRate, the percent $_uploadCompletionTime step $stepsUp');
+      },
     );
+  }
+
+  void reset() {
+    _downloadRate = 0;
+    _uploadRate = 0;
+    _downloadProgress = '0';
+    _uploadProgress = '0';
+    _unitText = 'Mb/s';
+    _downloadCompletionTime = 0;
+    _uploadCompletionTime = 0;
+
+    downloadRate = 0;
+    uploadRate = 0;
+    stepsDown = 0;
+    stepsUp = 0;
   }
 
   storeToCit() async {

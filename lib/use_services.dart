@@ -33,14 +33,10 @@ class UserServcies {
       'data_connect': model.data,
     });
 
-    if (kDebugMode) {
-      print('[BackgroundFetch] response ${response.body}');
-    }
+    print('[BackgroundFetch] response ${response.body}');
 
     var data = json.decode(response.body);
-    if (kDebugMode) {
-      print(data['meta']['code']);
-    }
+    print(data['meta']['code']);
     // var data = json.decode(response.body);
     // print(data);
 

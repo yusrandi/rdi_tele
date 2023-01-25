@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:telephony/telephony.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 
 class UseTele {
   bool isNetworkRoaming = false;
@@ -11,12 +14,14 @@ class UseTele {
   String simOperator = "";
   String simState = "";
   String serviceState = "";
+  String uuid = "";
 
   UseTele() {
     telephonyTest();
   }
 
   final Telephony telephony = Telephony.instance;
+  var deviceInfo = DeviceInfoPlugin();
 
   telephonyTest() async {
     isNetworkRoaming = (await telephony.isNetworkRoaming)!;
@@ -24,10 +29,19 @@ class UseTele {
     dataActivity = (await telephony.cellularDataState).toString();
     networkOperator = (await telephony.networkOperator)!;
     operatorName = (await telephony.networkOperatorName)!;
-    networkType = (await telephony.dataNetworkType).toString();
+
+    NetworkType? networkTypeIs = await telephony.dataNetworkType;
+
+    networkType = networkTypeIs.name;
+
     phoneType = (await telephony.phoneType).toString();
     simOperator = (await telephony.simOperator)!;
     simState = (await telephony.simState).toString();
     serviceState = (await telephony.serviceState).toString();
+
+    if (Platform.isAndroid) {
+      var androidDeviceInfo = await deviceInfo.androidInfo;
+      uuid = androidDeviceInfo.id; // unique ID on Android
+    }
   }
 }
