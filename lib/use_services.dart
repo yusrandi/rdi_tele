@@ -12,6 +12,7 @@ class UserServcies {
     // print(
     // '[BackgroundFetch] model ${model.networkOperator}, ${model.networkType}');
     var response = await http.post(Uri.parse(Api().citPostDataUrl), body: {
+      "connection": model.connection.toString(),
       "cqi": model.cqi.toString(),
       "signal_quality": model.signalQuality.toString(),
       "signal_strength": model.signalStrength.toString(),

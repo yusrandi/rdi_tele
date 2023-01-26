@@ -96,13 +96,13 @@ class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
           hashMap["cellid"] = cellSignalStrengthLte.rssi
 
         }
+
       }
     }else{
       val cellInfo : CellInfo = cellInfoList[0]
       if (cellInfo is CellInfoLte){
         val lte : CellInfoLte = cellInfo
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-
 
           hashMap["dbm"] = lte.cellSignalStrength.dbm
           hashMap["cqi"] = lte.cellSignalStrength.cqi
@@ -116,6 +116,22 @@ class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
 
         }
       }
+//      if (cellInfo is CellInfoGsm){
+//        val gsm : CellInfoGsm = cellInfo
+//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+//
+//          hashMap["dbm"] = gsm.cellSignalStrength.dbm
+//          hashMap["cqi"] = gsm.cellSignalStrength.cqi
+//          hashMap["rsrp"] = gsm.cellSignalStrength.rsrp
+//          hashMap["rsrq"] = gsm.cellSignalStrength.rsrq
+//          hashMap["rssnr"] = gsm.cellSignalStrength.rssnr
+//          hashMap["level"] = gsm.cellSignalStrength.level
+//          hashMap["rssi"] = gsm.cellSignalStrength.rssi
+//          hashMap["cellid"] = gsm.cellIdentity.ci
+//
+//
+//        }
+//      }
     }
 
     return hashMap

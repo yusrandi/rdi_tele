@@ -1,4 +1,5 @@
 class CitModel {
+  String connection;
   String cqi;
   String signalQuality;
   String signalStrength;
@@ -20,6 +21,7 @@ class CitModel {
   String data;
 
   CitModel({
+    required this.connection,
     required this.cqi,
     required this.signalQuality,
     required this.signalStrength,

@@ -34,6 +34,7 @@ class RdiTele {
   final internetSpeedTest =
       FlutterInternetSpeedTest(); //FlutterInternetSpeedTest()..enableLog();
 
+  String resConnection = '';
   String resCqi = '0';
   String resSignalQuality = '0';
   String resSignalStrength = '0';
@@ -147,6 +148,8 @@ class RdiTele {
     internetSpeedTestPlugin();
 
     String connect = await UseConnectivity().checkConnectivity();
+
+    resConnection = connect;
     print("$TAG : checkConnectivity $connect");
 
     Position position = await UseLocation().getGeoLocationPosition();
@@ -368,6 +371,7 @@ class RdiTele {
 
   storeToCit() async {
     CitModel model = CitModel(
+        connection: resConnection,
         cqi: resCqi,
         signalQuality: resSignalQuality,
         signalStrength: resSignalStrength,
