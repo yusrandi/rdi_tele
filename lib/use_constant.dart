@@ -1,8 +1,8 @@
 class UseDeviceInfoConst {
   static const myDeviceModel = 'myDeviceModel';
-  static const myDevice = 'myDeviceModel';
-  static const myProduct = 'myDeviceModel';
-  static const myBrand = 'myDeviceModel';
+  static const myDevice = 'myDevice';
+  static const myProduct = 'myProduct';
+  static const myBrand = 'myBrand';
 }
 
 class UseTMConst {

@@ -26,9 +26,9 @@ class UserServcies {
       "network_operator": model.networkOperator.toString(),
       'uuid': model.uuid,
       'cellid': model.cellid,
-      'dev_name': model.brand,
-      'dev_type': model.device,
-      'dev_model': model.model,
+      'brand': model.brand,
+      'type': model.device,
+      'model': model.model,
       'address': model.address,
       'data_connect': model.data,
     });

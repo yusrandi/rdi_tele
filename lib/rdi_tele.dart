@@ -173,18 +173,19 @@ class RdiTele {
       Map<dynamic, dynamic> tmChanel = await _rdiTelePlugin.getTM();
       print("[$TAG] getUuid $deviceInfo");
 
-      resUuid = deviceInfo[UseDeviceInfoConst.myProduct];
+      // resUuid = deviceInfo[UseDeviceInfoConst.myProduct];
       resBrand = deviceInfo[UseDeviceInfoConst.myBrand];
       resDevice = deviceInfo[UseDeviceInfoConst.myDevice];
       resModel = deviceInfo[UseDeviceInfoConst.myDeviceModel];
 
+      print("[$TAG] resBrand $resBrand");
+
       resNetworkType = _useTele.networkType;
 
-      var operatorNameSplit = _useTele.operatorName.split("-");
-      resNetworkOperator = operatorNameSplit[0];
-
+      // var operatorNameSplit = _useTele.operatorName.split("-");
+      resNetworkOperator = _useTele.operatorName;
       resUuid = _useTele.uuid;
-      resCellId = _useTele.uuid;
+      // resCellId = _useTele.uuid;
 
       print("[$TAG] $tmChanel");
 
