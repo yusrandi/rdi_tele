@@ -1,7 +1,7 @@
 name: rdi_tele
 description: A Flutter plugin Android Telephony Manager project .
 version: 0.0.1
-homepage:
+homepage: https://github.com/yusrandi/rdi_tele
 
 environment:
   sdk: '>=2.18.5 <3.0.0'
