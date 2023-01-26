@@ -196,6 +196,7 @@ class RdiTele {
       resRsrp = tmChanel[UseTMConst.rsrp].toString();
       resRssi = tmChanel[UseTMConst.rssi].toString();
       resRssnr = tmChanel[UseTMConst.rssnr].toString();
+      resCellId = tmChanel[UseTMConst.cellid].toString();
     }
   }
 

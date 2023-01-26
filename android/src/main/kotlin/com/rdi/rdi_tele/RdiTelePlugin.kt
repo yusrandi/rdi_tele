@@ -93,6 +93,7 @@ class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
           hashMap["rssnr"] = cellSignalStrengthLte.rssnr
           hashMap["level"] = cellSignalStrengthLte.level
           hashMap["rssi"] = cellSignalStrengthLte.rssi
+          hashMap["cellid"] = cellSignalStrengthLte.rssi
 
         }
       }
@@ -102,6 +103,7 @@ class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
         val lte : CellInfoLte = cellInfo
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
 
+
           hashMap["dbm"] = lte.cellSignalStrength.dbm
           hashMap["cqi"] = lte.cellSignalStrength.cqi
           hashMap["rsrp"] = lte.cellSignalStrength.rsrp
@@ -109,6 +111,7 @@ class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
           hashMap["rssnr"] = lte.cellSignalStrength.rssnr
           hashMap["level"] = lte.cellSignalStrength.level
           hashMap["rssi"] = lte.cellSignalStrength.rssi
+          hashMap["cellid"] = lte.cellIdentity.ci
 
 
         }

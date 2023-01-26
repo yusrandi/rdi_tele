@@ -13,4 +13,5 @@ class UseTMConst {
   static const rssnr = 'rssnr';
   static const level = 'level';
   static const rssi = 'rssi';
+  static const cellid = 'cellid';
 }
