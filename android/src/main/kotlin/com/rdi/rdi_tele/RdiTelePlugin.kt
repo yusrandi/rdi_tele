@@ -1,21 +1,18 @@
 package com.rdi.rdi_tele
 
-import android.Manifest
 import android.annotation.SuppressLint
 import android.annotation.TargetApi
 import android.content.Context
-import android.content.Context.TELEPHONY_SERVICE
-import android.content.pm.PackageManager
 import android.os.Build
-import android.provider.Settings
 import android.telephony.*
+import android.util.Log
 import androidx.annotation.NonNull
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
-import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
-
+import io.flutter.plugin.common.MethodChannel.MethodCallHandler
+//
 /** RdiTelePlugin */
 class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
   /// The MethodChannel that will the communication between Flutter and native Android
@@ -25,17 +22,18 @@ class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
   private lateinit var channel : MethodChannel
   private var context: Context? = null
 
+
   override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     context = flutterPluginBinding.applicationContext
     channel = MethodChannel(flutterPluginBinding.binaryMessenger, "rdi_tele")
     channel.setMethodCallHandler(this)
   }
 
-  override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
+  override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: MethodChannel.Result) {
 
 
     when (call.method) {
-      "getPlatformVersion" -> result.success("Android ${android.os.Build.VERSION.RELEASE}")
+      "getPlatformVersion" -> result.success("Android ${Build.VERSION.RELEASE}")
       "getUid" -> result.success(getUuid())
       "getTM" -> result.success(getTM())
 
@@ -50,7 +48,6 @@ class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
   @SuppressLint("HardwareIds")
   private fun getUuid() : HashMap<String, String>{
 
-    var listItem = mutableListOf<String>()
     var hashMap : HashMap<String, String>
             = HashMap()
 
@@ -67,12 +64,16 @@ class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
     return hashMap
   }
 
+//  @SuppressLint("HardwareIds")
   @TargetApi(Build.VERSION_CODES.Q)
   private fun getTM():HashMap<String, Int>{
     var hashMap : HashMap<String, Int>
             = HashMap()
     val tm: TelephonyManager = context!!.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+//     val mPhoneNumber: String = tm.line1Number
+//     val mSerialNumber: String = tm.simSerialNumber
 
+//     Log.e("[RdiTele]", "Andro mPhoneNumber $mPhoneNumber, mSerialNumber $mSerialNumber")
 
     val cellInfoList: List<CellInfo> = tm.allCellInfo
 //        Log.e(TAG, "Andro : ${cellInfoList[0]}")
@@ -94,7 +95,7 @@ class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
           hashMap["level"] = cellSignalStrengthLte.level
           hashMap["rssi"] = cellSignalStrengthLte.rssi
           hashMap["cellid"] = cellSignalStrengthLte.rssi
-
+          hashMap["ta"] = cellSignalStrengthLte.timingAdvance
         }
 
       }
@@ -112,8 +113,7 @@ class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
           hashMap["level"] = lte.cellSignalStrength.level
           hashMap["rssi"] = lte.cellSignalStrength.rssi
           hashMap["cellid"] = lte.cellIdentity.ci
-
-
+          hashMap["ta"] = lte.cellSignalStrength.timingAdvance
         }
       }
 //      if (cellInfo is CellInfoGsm){

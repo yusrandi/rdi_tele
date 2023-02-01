@@ -14,4 +14,5 @@ class UseTMConst {
   static const level = 'level';
   static const rssi = 'rssi';
   static const cellid = 'cellid';
+  static const ta = 'ta';
 }

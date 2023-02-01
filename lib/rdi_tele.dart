@@ -42,6 +42,7 @@ class RdiTele {
   String resRsrq = '0';
   String resRssnr = '0';
   String resRssi = '0';
+  String resTA = '0';
   String resJitter = '0.0';
   String resRtPing = '0.0';
   String resUpload = '0.0';
@@ -75,6 +76,7 @@ class RdiTele {
     Map<Permission, PermissionStatus> statuses = await [
       Permission.location,
       Permission.phone,
+      Permission.sms,
     ].request();
     print("[$TAG], Permission.location1 ${statuses[Permission.location]}");
   }
@@ -200,6 +202,7 @@ class RdiTele {
       resRssi = tmChanel[UseTMConst.rssi].toString();
       resRssnr = tmChanel[UseTMConst.rssnr].toString();
       resCellId = tmChanel[UseTMConst.cellid].toString();
+      resTA = tmChanel[UseTMConst.ta].toString();
     }
   }
 
@@ -390,6 +393,7 @@ class RdiTele {
         device: resDevice,
         model: resModel,
         address: resAddress,
+        ta: resTA,
         data: resDataConnect);
 
     var response = await UserServcies().passDataCit(model);

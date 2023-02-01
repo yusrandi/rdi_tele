@@ -19,6 +19,7 @@ class CitModel {
   String model;
   String address;
   String data;
+  String ta;
 
   CitModel({
     required this.connection,
@@ -41,5 +42,6 @@ class CitModel {
     required this.model,
     required this.address,
     required this.data,
+    required this.ta,
   });
 }
