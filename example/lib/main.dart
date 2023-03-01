@@ -51,21 +51,6 @@ class _MyAppState extends State<MyApp> {
   final internetSpeedTest =
       FlutterInternetSpeedTest(); //FlutterInternetSpeedTest()..enableLog();
 
-  bool _testInProgress = false;
-  double _downloadRate = 0;
-  double _uploadRate = 0;
-  String _downloadProgress = '0';
-  String _uploadProgress = '0';
-  int _downloadCompletionTime = 0;
-  int _uploadCompletionTime = 0;
-  bool _isServerSelectionInProgress = false;
-
-  String? _ip;
-  String? _asn;
-  String? _isp;
-
-  String _unitText = 'Mb/s';
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -76,20 +61,5 @@ class _MyAppState extends State<MyApp> {
         body: Center(child: Text('bakcground task')),
       ),
     );
-  }
-
-  void reset() {
-    setState(() {
-      {
-        _testInProgress = false;
-        _downloadRate = 0;
-        _uploadRate = 0;
-        _downloadProgress = '0';
-        _uploadProgress = '0';
-        _unitText = 'Mb/s';
-        _downloadCompletionTime = 0;
-        _uploadCompletionTime = 0;
-      }
-    });
   }
 }

@@ -39,4 +39,15 @@ class MethodChannelRdiTele extends RdiTelePlatform {
       return {};
     }
   }
+
+  @override
+  Future<Map> getPing() async {
+    try {
+      LinkedHashMap<Object?, Object?> data =
+          await methodChannel.invokeMethod('getPing');
+      return data;
+    } on PlatformException catch (e) {
+      return {};
+    }
+  }
 }

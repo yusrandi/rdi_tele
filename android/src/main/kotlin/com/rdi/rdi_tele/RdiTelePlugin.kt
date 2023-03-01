@@ -5,13 +5,21 @@ import android.annotation.TargetApi
 import android.content.Context
 import android.os.Build
 import android.telephony.*
+import android.util.ArrayMap
 import android.util.Log
 import androidx.annotation.NonNull
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
-import io.flutter.plugin.common.MethodChannel.Result
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
+import io.flutter.plugin.common.MethodChannel.Result
+import java.io.BufferedReader
+import java.io.IOException
+import java.io.InputStreamReader
+import java.text.DateFormat
+import java.util.*
+import java.util.regex.Pattern
+
 //
 /** RdiTelePlugin */
 class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
@@ -21,6 +29,10 @@ class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
   /// when the Flutter Engine is detached from the Activity
   private lateinit var channel : MethodChannel
   private var context: Context? = null
+  
+  companion object{
+    const val TAG = "RdiTelePlugin"
+  }
 
 
   override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
@@ -30,12 +42,11 @@ class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
   }
 
   override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: MethodChannel.Result) {
-
-
     when (call.method) {
       "getPlatformVersion" -> result.success("Android ${Build.VERSION.RELEASE}")
       "getUid" -> result.success(getUuid())
       "getTM" -> result.success(getTM())
+      "getPing" -> result.success(PingTest.runNVT())
 
       else -> result.notImplemented()
     }
@@ -76,7 +87,7 @@ class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
 //     Log.e("[RdiTele]", "Andro mPhoneNumber $mPhoneNumber, mSerialNumber $mSerialNumber")
 
     val cellInfoList: List<CellInfo> = tm.allCellInfo
-//        Log.e(TAG, "Andro : ${cellInfoList[0]}")
+        Log.e("RdiTele", "Andro : ${cellInfoList}")
 
     if (cellInfoList.isEmpty()){
       val signalStrength: SignalStrength? = tm.signalStrength
@@ -102,6 +113,7 @@ class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
     }else{
       val cellInfo : CellInfo = cellInfoList[0]
       if (cellInfo is CellInfoLte){
+
         val lte : CellInfoLte = cellInfo
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
 
@@ -135,5 +147,80 @@ class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
     }
 
     return hashMap
+  }
+
+  @TargetApi(Build.VERSION_CODES.KITKAT)
+  private fun getPing() : Map<String, Any>{
+    val dataNVT: MutableMap<String, Any> = ArrayMap()
+    try {
+      val runtime = Runtime.getRuntime()
+      val process = runtime.exec("ping -s 1024 -c 10 -w 10 8.8.8.8")
+      val stdInput = BufferedReader(InputStreamReader(process.inputStream))
+      var s: String
+      val res = StringBuilder()
+      val avgRes = StringBuilder()
+
+
+      while (stdInput.readLine() != null){
+        s = stdInput.readLine()
+        if (s.contains("packets transmitted")) {
+          Log.d(TAG, "runNVT: ping : $s")
+          res.append(s).append("\n")
+        }
+        if (s.contains("rtt")) {
+          Log.d(TAG, "runNVT: get avg res : $s")
+          avgRes.append(s).append("\n")
+//          pingResult = s;
+        }
+      }
+//      while (stdInput.readLine().also { s = it } != null) {
+//
+//      }
+      stdInput.close()
+      process.destroy()
+      val percentage: Int = 100 - getPercentage(res.toString())
+      Log.d(TAG, "runNVT: get res data from : $avgRes")
+      var resNVTTime = "0"
+      if (!avgRes.toString().isEmpty() || !avgRes.toString().isEmpty()) {
+        resNVTTime = avgRes.toString()
+                        resNVTTime = waitingTime(avgRes.toString());
+      }
+      val df = DateFormat.getDateTimeInstance()
+      Log.d(TAG, "runNVT: resNVTTime : $resNVTTime")
+      dataNVT["percentage"] = percentage
+      dataNVT["resNVT"] = resNVTTime
+      dataNVT["nvtTime"] = df.format(Date())
+
+//      pingResult = resNVTTime
+    } catch (e: IOException) {
+      e.printStackTrace()
+//      pingResult = e.printStackTrace().toString()
+    }
+
+//    Log.d(TAG, "pingResult : $pingResult")
+
+    return dataNVT
+    
+  }
+
+  private fun waitingTime(avgRes: String): String {
+    val waitingTimeSplit = avgRes.split("=").toTypedArray()
+    Log.d(TAG, "waitingTime " + waitingTimeSplit[0])
+    val value = waitingTimeSplit[1].split("/").toTypedArray()
+    return value[1]
+  }
+
+  private fun getPercentage(ping: String): Int {
+    Log.d(TAG, "ping $ping")
+    val waitingTime = ping.split(",").toTypedArray()
+    val persentase = waitingTime[2]
+    val p = Pattern.compile("\\d+")
+    val m = p.matcher(persentase)
+    var result: String? = null
+    while (m.find()) {
+      println("ping " + m.group())
+      result = m.group()
+    }
+    return result?.toInt() ?: 0
   }
 }

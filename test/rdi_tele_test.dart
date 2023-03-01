@@ -21,6 +21,12 @@ class MockRdiTelePlatform
     // TODO: implement getTM
     throw UnimplementedError();
   }
+
+  @override
+  Future<Map> getPing() {
+    // TODO: implement getPing
+    throw UnimplementedError();
+  }
 }
 
 void main() {

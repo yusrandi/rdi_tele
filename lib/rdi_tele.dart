@@ -145,7 +145,7 @@ class RdiTele {
   }
 
   void todo() async {
-    await pingTest();
+    // await pingTest();
     // flutterSpeedTest();
     internetSpeedTestPlugin();
 
@@ -176,7 +176,18 @@ class RdiTele {
       print("$TAG : operatorName ${_useTele.operatorName}");
       Map<dynamic, dynamic> deviceInfo = await _rdiTelePlugin.getDeviceInfo();
       Map<dynamic, dynamic> tmChanel = await _rdiTelePlugin.getTM();
+      Map<Object?, Object?> getPingChanel = await _rdiTelePlugin.getPing();
       print("[$TAG] getUuid $deviceInfo");
+      print("[$TAG] getPingChanel ${getPingChanel['resNVT']}");
+
+      var pingSplit = getPingChanel['resNVT']!.toString().split("/");
+
+      var min = pingSplit[0];
+      var max = pingSplit[2];
+
+      resRtPing = pingSplit[1];
+      resJitter = (double.parse(max.toString()) - double.parse(min.toString()))
+          .toString();
 
       // resUuid = deviceInfo[UseDeviceInfoConst.myProduct];
       resBrand = deviceInfo[UseDeviceInfoConst.myBrand];
@@ -206,47 +217,47 @@ class RdiTele {
     }
   }
 
-  pingTest() async {
-    int countPing = 5;
-    final ping = Ping('google.com', count: countPing);
+//   pingTest() async {
+//     int countPing = 5;
+//     final ping = Ping('google.com', count: countPing);
 
-    print('Running command: ${ping.command}');
+//     print('Running command: ${ping.command}');
 
-    List<int> listPing = [];
+//     List<int> listPing = [];
 
-    try {
-      ping.stream.listen((event) {
-        print("[$TAG] ping $event");
+//     try {
+//       ping.stream.listen((event) {
+//         print("[$TAG] ping $event");
 
-        final res = event.response;
-        if (res == null) return;
+//         final res = event.response;
+//         if (res == null) return;
 
-        listPing.add(event.response!.time!.inMilliseconds);
+//         listPing.add(event.response!.time!.inMilliseconds);
 
-        final ip = res.ip;
-        final ttl = res.ttl;
-        final time = res.time;
+//         final ip = res.ip;
+//         final ttl = res.ttl;
+//         final time = res.time;
 
-        print("[$TAG] ping ip $ip, ttl $ttl, time $time");
+//         print("[$TAG] ping ip $ip, ttl $ttl, time $time");
 
-        if (listPing.length == countPing) {
-          // print("Ping Count ${listPing.length}");
+//         if (listPing.length == countPing) {
+//           // print("Ping Count ${listPing.length}");
 
-          int sum = listPing.fold(0, (p, c) => p + c);
-          int max = listPing.reduce((curr, next) => curr > next ? curr : next);
-          int min = listPing.reduce((curr, next) => curr < next ? curr : next);
+//           int sum = listPing.fold(0, (p, c) => p + c);
+//           int max = listPing.reduce((curr, next) => curr > next ? curr : next);
+//           int min = listPing.reduce((curr, next) => curr < next ? curr : next);
 
-          // print("Sum ${sum}");
-          print(
-              "RT  sum $sum / length ${listPing.length}  = ${sum / listPing.length}");
-          print("Jitter Max $max -  Min $min  = ${max - min} ");
+//           // print("Sum ${sum}");
+//           print(
+//               "RT  sum $sum / length ${listPing.length}  = ${sum / listPing.length}");
+//           print("Jitter Max $max -  Min $min  = ${max - min} ");
 
-          resRtPing = (sum / listPing.length).toString();
-          resJitter = (max - min).toString();
-        }
-      });
-    } catch (e) {}
-  }
+//           resRtPing = (sum / listPing.length).toString();
+//           resJitter = (max - min).toString();
+//         }
+//       });
+//     } catch (e) {}
+//   }
 
   double downloadRate = 0;
   double uploadRate = 0;

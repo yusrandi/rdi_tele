@@ -34,4 +34,8 @@ abstract class RdiTelePlatform extends PlatformInterface {
   Future<Map> getTM() {
     throw UnimplementedError('platformVersion() has not been implemented.');
   }
+
+  Future<Map> getPing() {
+    throw UnimplementedError('platformVersion() has not been implemented.');
+  }
 }
