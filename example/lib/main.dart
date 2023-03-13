@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_internet_speed_test/flutter_internet_speed_test.dart';
 import 'package:rdi_tele/rdi_tele.dart';
+import 'package:rdi_tele_example/rdi_testing.dart';
 
 void main() {
   runApp(const MyApp());
@@ -54,11 +55,12 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       home: Scaffold(
         appBar: AppBar(
           title: const Text('RDI Tele'),
         ),
-        body: Center(child: Text('bakcground task')),
+        body: const RdiTesting(),
       ),
     );
   }
