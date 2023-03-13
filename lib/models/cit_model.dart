@@ -20,6 +20,8 @@ class CitModel {
   String address;
   String data;
   String ta;
+  String date;
+  String version;
 
   CitModel({
     required this.connection,
@@ -43,5 +45,7 @@ class CitModel {
     required this.address,
     required this.data,
     required this.ta,
+    required this.date,
+    required this.version,
   });
 }

@@ -3,6 +3,7 @@ class UseDeviceInfoConst {
   static const myDevice = 'myDevice';
   static const myProduct = 'myProduct';
   static const myBrand = 'myBrand';
+  static const myVersionRelease = 'myVersionRelease';
 }
 
 class UseTMConst {

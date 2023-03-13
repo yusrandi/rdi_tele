@@ -66,11 +66,13 @@ class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
     val myDevice = Build.DEVICE
     val myProduct = Build.PRODUCT
     val myBrand = Build.BRAND
+    val myVersionRelease = Build.VERSION.RELEASE
 
     hashMap["myDeviceModel"] = myDeviceModel
     hashMap["myDevice"] = myDevice
     hashMap["myProduct"] = myProduct
     hashMap["myBrand"] = myBrand
+    hashMap["myVersionRelease"] = myVersionRelease
 
     return hashMap
   }
@@ -87,7 +89,7 @@ class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
 //     Log.e("[RdiTele]", "Andro mPhoneNumber $mPhoneNumber, mSerialNumber $mSerialNumber")
 
     val cellInfoList: List<CellInfo> = tm.allCellInfo
-        Log.e("RdiTele", "Andro : ${cellInfoList}")
+//        Log.e("RdiTele", "Andro : $cellInfoList")
 
     if (cellInfoList.isEmpty()){
       val signalStrength: SignalStrength? = tm.signalStrength

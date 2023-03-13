@@ -33,6 +33,8 @@ class UserServcies {
       'address': model.address,
       'data_connect': model.data,
       'ta': model.ta,
+      'date': model.date,
+      'version': model.version
     });
 
     print('[BackgroundFetch] response ${response.body}');

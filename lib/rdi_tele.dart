@@ -60,7 +60,7 @@ class RdiTele {
   String resDataConnect = "";
 
   RdiTele() {
-    initData();
+    // initData();
   }
   Future<String?> getPlatformVersion() {
     return RdiTelePlatform.instance.getPlatformVersion();
@@ -147,7 +147,8 @@ class RdiTele {
   void todo() async {
     // await pingTest();
     // flutterSpeedTest();
-    internetSpeedTestPlugin();
+
+    // internetSpeedTestPlugin();
 
     String connect = await UseConnectivity().checkConnectivity();
 
@@ -177,6 +178,7 @@ class RdiTele {
       Map<dynamic, dynamic> deviceInfo = await _rdiTelePlugin.getDeviceInfo();
       Map<dynamic, dynamic> tmChanel = await _rdiTelePlugin.getTM();
       Map<Object?, Object?> getPingChanel = await _rdiTelePlugin.getPing();
+
       print("[$TAG] getUuid $deviceInfo");
       print("[$TAG] getPingChanel ${getPingChanel['resNVT']}");
 
@@ -194,7 +196,8 @@ class RdiTele {
       resDevice = deviceInfo[UseDeviceInfoConst.myDevice];
       resModel = deviceInfo[UseDeviceInfoConst.myDeviceModel];
 
-      print("[$TAG] resBrand $resBrand");
+      print(
+          "[$TAG] myVersionRelease ${deviceInfo[UseDeviceInfoConst.myVersionRelease]}");
 
       resNetworkType = _useTele.networkType;
 
@@ -216,48 +219,6 @@ class RdiTele {
       resTA = tmChanel[UseTMConst.ta].toString();
     }
   }
-
-//   pingTest() async {
-//     int countPing = 5;
-//     final ping = Ping('google.com', count: countPing);
-
-//     print('Running command: ${ping.command}');
-
-//     List<int> listPing = [];
-
-//     try {
-//       ping.stream.listen((event) {
-//         print("[$TAG] ping $event");
-
-//         final res = event.response;
-//         if (res == null) return;
-
-//         listPing.add(event.response!.time!.inMilliseconds);
-
-//         final ip = res.ip;
-//         final ttl = res.ttl;
-//         final time = res.time;
-
-//         print("[$TAG] ping ip $ip, ttl $ttl, time $time");
-
-//         if (listPing.length == countPing) {
-//           // print("Ping Count ${listPing.length}");
-
-//           int sum = listPing.fold(0, (p, c) => p + c);
-//           int max = listPing.reduce((curr, next) => curr > next ? curr : next);
-//           int min = listPing.reduce((curr, next) => curr < next ? curr : next);
-
-//           // print("Sum ${sum}");
-//           print(
-//               "RT  sum $sum / length ${listPing.length}  = ${sum / listPing.length}");
-//           print("Jitter Max $max -  Min $min  = ${max - min} ");
-
-//           resRtPing = (sum / listPing.length).toString();
-//           resJitter = (max - min).toString();
-//         }
-//       });
-//     } catch (e) {}
-//   }
 
   double downloadRate = 0;
   double uploadRate = 0;
@@ -304,7 +265,7 @@ class RdiTele {
         resUpload = (uploadRate / stepsUp).toStringAsFixed(2);
         print('[$TAG] : resUpload $resUpload');
 
-        storeToCit();
+        // storeToCit();
       },
       onProgress: (double percent, TestResult data) {
         _unitText = data.unit == SpeedUnit.Kbps ? 'Kb/s' : 'Mb/s';
@@ -381,33 +342,5 @@ class RdiTele {
     uploadRate = 0;
     stepsDown = 0;
     stepsUp = 0;
-  }
-
-  storeToCit() async {
-    CitModel model = CitModel(
-        connection: resConnection,
-        cqi: resCqi,
-        signalQuality: resSignalQuality,
-        signalStrength: resSignalStrength,
-        rssnr: resRssnr,
-        upload: resUpload,
-        download: resDownload,
-        jitter: resJitter,
-        rtPing: resRtPing,
-        latPos: resLat,
-        lngPos: resLng,
-        networkType: resNetworkType,
-        networkOperator: resNetworkOperator,
-        uuid: resUuid,
-        cellid: resCellId,
-        brand: resBrand,
-        device: resDevice,
-        model: resModel,
-        address: resAddress,
-        ta: resTA,
-        data: resDataConnect);
-
-    var response = await UserServcies().passDataCit(model);
-    print('$TAG response $response');
   }
 }
