@@ -20,6 +20,7 @@ import java.text.DateFormat
 import java.util.*
 import java.util.regex.Pattern
 
+
 //
 /** RdiTelePlugin */
 class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
@@ -31,7 +32,7 @@ class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
   private var context: Context? = null
   
   companion object{
-    const val TAG = "RdiTelePlugin"
+    const val TAG = "RDI:Andro"
   }
 
 
@@ -78,7 +79,7 @@ class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
   }
 
 //  @SuppressLint("HardwareIds")
-  @TargetApi(Build.VERSION_CODES.Q)
+  @TargetApi(Build.VERSION_CODES.R)
   private fun getTM():HashMap<String, Int>{
     var hashMap : HashMap<String, Int>
             = HashMap()
@@ -88,48 +89,83 @@ class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
 
 //     Log.e("[RdiTele]", "Andro mPhoneNumber $mPhoneNumber, mSerialNumber $mSerialNumber")
 
-    val cellInfoList: List<CellInfo> = tm.allCellInfo
-//        Log.e("RdiTele", "Andro : $cellInfoList")
+  val ss : CellSignalStrengthLte  = tm.signalStrength!!.cellSignalStrengths[0] as CellSignalStrengthLte
+  val cellinfo = tm.allCellInfo[0]
+  val cell : CellIdentityLte  = cellinfo.cellIdentity as CellIdentityLte
+  val cellSignal : CellSignalStrengthLte  = cellinfo.cellSignalStrength as CellSignalStrengthLte
 
-    if (cellInfoList.isEmpty()){
-      val signalStrength: SignalStrength? = tm.signalStrength
-//            Log.e(TAG, "Andro: getSignalQuality signalStrength $signalStrength")
+  Log.e(TAG, "Andro : ${ss.rssi} ${cell.ci} ${cellSignal.timingAdvance}")
 
-      val list: List<CellSignalStrength> = signalStrength!!.cellSignalStrengths
-      for (i in list.indices) {
-        if (list[i] is CellSignalStrengthLte) {
-          val cellSignalStrengthLte = list[i] as CellSignalStrengthLte
+  hashMap["dbm"] = ss.dbm
+  hashMap["cqi"] = cellSignal.cqi
+  hashMap["rsrp"] = ss.rsrp
+  hashMap["rsrq"] = ss.rsrq
+  hashMap["rssnr"] = ss.rssnr
+  hashMap["level"] = ss.level
+  hashMap["rssi"] = ss.rssi
+  hashMap["cellid"] = cell.ci
+  hashMap["ta"] = cellSignal.timingAdvance
 
-          hashMap["dbm"] = cellSignalStrengthLte.dbm
-          hashMap["cqi"] = cellSignalStrengthLte.cqi
-          hashMap["rsrp"] = cellSignalStrengthLte.rsrp
-          hashMap["rsrq"] = cellSignalStrengthLte.rsrq
-          hashMap["rssnr"] = cellSignalStrengthLte.rssnr
-          hashMap["level"] = cellSignalStrengthLte.level
-          hashMap["rssi"] = cellSignalStrengthLte.rssi
-          hashMap["cellid"] = cellSignalStrengthLte.rssi
-          hashMap["ta"] = cellSignalStrengthLte.timingAdvance
-        }
 
-      }
-    }else{
-      val cellInfo : CellInfo = cellInfoList[0]
-      if (cellInfo is CellInfoLte){
 
-        val lte : CellInfoLte = cellInfo
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-
-          hashMap["dbm"] = lte.cellSignalStrength.dbm
-          hashMap["cqi"] = lte.cellSignalStrength.cqi
-          hashMap["rsrp"] = lte.cellSignalStrength.rsrp
-          hashMap["rsrq"] = lte.cellSignalStrength.rsrq
-          hashMap["rssnr"] = lte.cellSignalStrength.rssnr
-          hashMap["level"] = lte.cellSignalStrength.level
-          hashMap["rssi"] = lte.cellSignalStrength.rssi
-          hashMap["cellid"] = lte.cellIdentity.ci
-          hashMap["ta"] = lte.cellSignalStrength.timingAdvance
-        }
-      }
+//  val cellInfoList: List<CellInfo> = tm.allCellInfo
+//        Log.e(TAG, "Andro : $cellInfoList")
+//
+//    if (cellInfoList.isEmpty()){
+//      val signalStrength: SignalStrength? = tm.signalStrength
+////            Log.e(TAG, "Andro: getSignalQuality signalStrength $signalStrength")
+//
+//      val list: List<CellSignalStrength> = signalStrength!!.cellSignalStrengths
+//      for (i in list.indices) {
+//        if (list[i] is CellSignalStrengthLte) {
+//          val cellSignalStrengthLte = list[i] as CellSignalStrengthLte
+//
+//          hashMap["dbm"] = cellSignalStrengthLte.dbm
+//          hashMap["cqi"] = cellSignalStrengthLte.cqi
+//          hashMap["rsrp"] = cellSignalStrengthLte.rsrp
+//          hashMap["rsrq"] = cellSignalStrengthLte.rsrq
+//          hashMap["rssnr"] = cellSignalStrengthLte.rssnr
+//          hashMap["level"] = cellSignalStrengthLte.level
+//          hashMap["rssi"] = cellSignalStrengthLte.rssi
+//          hashMap["cellid"] = cellSignalStrengthLte.rssi
+//          hashMap["ta"] = cellSignalStrengthLte.timingAdvance
+//
+//
+//        }
+//
+//      }
+//    }else{
+//      val cellInfo : CellInfo = cellInfoList[0]
+//      if (cellInfo is CellInfoLte){
+//
+//        val lte : CellInfoLte = cellInfo
+//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+//
+//          hashMap["dbm"] = lte.cellSignalStrength.dbm
+//          hashMap["cqi"] = lte.cellSignalStrength.cqi
+//          hashMap["rsrp"] = lte.cellSignalStrength.rsrp
+//          hashMap["rsrq"] = lte.cellSignalStrength.rsrq
+//          hashMap["rssnr"] = lte.cellSignalStrength.rssnr
+//          hashMap["level"] = lte.cellSignalStrength.level
+//          hashMap["rssi"] = lte.cellSignalStrength.rssi
+//          hashMap["cellid"] = lte.cellIdentity.ci
+//          hashMap["ta"] = lte.cellSignalStrength.timingAdvance
+//
+//
+//          val longCid = lte.cellIdentity.ci
+//
+//          val cellidHex = DecToHex(longCid)
+//          val eNBHex = cellidHex!!.substring(0, cellidHex.length - 2)
+//
+//
+//          val eNB = HexToDec(eNBHex)
+//
+//          Log.d(TAG,"cellidHex $cellidHex")
+//          Log.d(TAG,"eNBHex $eNBHex")
+//          Log.d(TAG, "eNB $eNB")
+//
+//        }
+//      }
 //      if (cellInfo is CellInfoGsm){
 //        val gsm : CellInfoGsm = cellInfo
 //        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -146,9 +182,21 @@ class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
 //
 //        }
 //      }
-    }
+//    }
+
 
     return hashMap
+  }
+
+
+  // Decimal -> hexadecimal
+  fun DecToHex(dec: Int): String? {
+    return String.format("%x", dec)
+  }
+
+  // hex -> decimal
+  fun HexToDec(hex: String): Int {
+    return hex.toInt(16)
   }
 
   @TargetApi(Build.VERSION_CODES.KITKAT)

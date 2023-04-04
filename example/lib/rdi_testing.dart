@@ -64,7 +64,7 @@ class _RdiTestingState extends State<RdiTesting> {
   String resVersion = "";
 
   void startTimer() {
-    countdownTimer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+    countdownTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
       DateTime now = DateTime.now();
       String formattedDate = DateFormat('yyyy-MM-dd  kk:mm:ss:SSS').format(now);
       //   resDateTime = formattedDate;
@@ -115,7 +115,7 @@ class _RdiTestingState extends State<RdiTesting> {
           listTA.add(element[UseTMConst.ta]);
         }
 
-        print(listCqi.join(","));
+        print(listRssi.join(","));
         resCqi = listCqi.join(",");
         resRsrq = listRsrq.join(",");
         resSignalStrength = listSignalStrength.join(",");
@@ -139,8 +139,21 @@ class _RdiTestingState extends State<RdiTesting> {
   @override
   void initState() {
     super.initState();
+
     startTimer();
     todo();
+    // tesLooping();
+  }
+
+  tesLooping() async {
+    String formattedDate =
+        DateFormat('yyyy-MM-dd  kk:mm:ss:SSS').format(DateTime.now());
+
+    for (var i = 0; i < 50; i++) {
+      print("$TAG $i $formattedDate");
+      Map<dynamic, dynamic> tmChanel = await _rdiTelePlugin.getTM();
+      print("[$TAG] tmChanel $tmChanel");
+    }
   }
 
   @override
