@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:developer';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/src/widgets/container.dart';
@@ -15,6 +17,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:rdi_tele/use_services.dart';
 import 'package:rdi_tele/use_tele.dart';
+import 'package:background_fetch/background_fetch.dart';
+import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 
 class RdiTesting extends StatefulWidget {
   const RdiTesting({super.key});
@@ -143,6 +147,93 @@ class _RdiTestingState extends State<RdiTesting> {
     startTimer();
     todo();
     // tesLooping();
+    // initPlatformState();
+
+    // alarmManager();
+  }
+
+  // Be sure to annotate your callback function to avoid issues in release mode on Flutter >= 3.3.0
+  @pragma('vm:entry-point')
+  static void printHello() {
+    final DateTime now = DateTime.now();
+    final int isolateId = Isolate.current.hashCode;
+    print(
+        "$TAG : [$now] Hello, world! isolate=${isolateId} function='$printHello'");
+    // todoInPriodic('$now');
+    final instance = _RdiTestingState();
+    instance.todoInPriodic('$now');
+  }
+
+  @pragma('vm:entry-point')
+  Future<void> callback() async {
+    print("[$TAG] this is callback");
+  }
+
+  void alarmManager() async {
+    final int helloAlarmID = 10;
+    await AndroidAlarmManager.periodic(
+        const Duration(minutes: 1), helloAlarmID, printHello);
+  }
+
+  @pragma("vm:entry-point")
+  // Platform messages are asynchronous, so we initialize in an async method.
+  Future<void> initPlatformState() async {
+    // Load persisted fetch events from SharedPreferences
+
+    // Configure BackgroundFetch.
+    try {
+      var status = await BackgroundFetch.configure(
+          BackgroundFetchConfig(
+              minimumFetchInterval: 1,
+              forceAlarmManager: true,
+              stopOnTerminate: false,
+              startOnBoot: true,
+              enableHeadless: true,
+              requiresBatteryNotLow: false,
+              requiresCharging: false,
+              requiresStorageNotLow: false,
+              requiresDeviceIdle: false,
+              requiredNetworkType: NetworkType.NONE),
+          _onBackgroundFetch,
+          _onBackgroundFetchTimeout);
+      print('[$TAG] initPlatformState : configure success: $status');
+
+      // task on init
+
+      String cdate =
+          DateFormat("EEEEE yyyy-MM-dd HH:mm:ss").format(DateTime.now());
+      print("[$TAG] $cdate ");
+    } on Exception catch (e) {
+      print("[$TAG] initPlatformState : configure ERROR: $e");
+    }
+  }
+
+  void _onBackgroundFetch(String taskId) async {
+    String cdate =
+        DateFormat("EEEEE yyyy-MM-dd HH:mm:ss").format(DateTime.now());
+
+    var timestamp = DateTime.now();
+
+    // This is the fetch-event callback.
+    print("[$TAG] _onBackgroundFetch: Event received: $taskId");
+    print("[$TAG] _onBackgroundFetch : _onBackgroundFetch $cdate $taskId");
+
+    print("[$TAG] $cdate ");
+    Map<dynamic, dynamic> tmChanel = await _rdiTelePlugin.getTM();
+    print("[$TAG] tmChanel $tmChanel");
+    // startTimer();
+
+    // when receive task
+
+    // IMPORTANT:  You must signal completion of your fetch task or the OS can punish your app
+    // for taking too long in the background.
+    BackgroundFetch.finish(taskId);
+  }
+
+  /// This event fires shortly before your task is about to timeout.  You must finish any outstanding work and call BackgroundFetch.finish(taskId).
+  void _onBackgroundFetchTimeout(String taskId) {
+    print("[$TAG] _onBackgroundFetchTimeout:  TIMEOUT: $taskId");
+    BackgroundFetch.finish(taskId);
   }
 
   tesLooping() async {
@@ -214,7 +305,7 @@ class _RdiTestingState extends State<RdiTesting> {
   void todoInPriodic(String formattedDate) async {
     if (Platform.isAndroid) {
       Map<dynamic, dynamic> tmChanel = await _rdiTelePlugin.getTM();
-      print("[$TAG] tmChanel $tmChanel");
+      //   print("[$TAG] tmChanel $tmChanel");
 
       String resCqi = tmChanel[UseTMConst.cqi].toString();
       String resRsrq = tmChanel[UseTMConst.rsrq].toString();
@@ -227,7 +318,9 @@ class _RdiTestingState extends State<RdiTesting> {
       String resTA = tmChanel[UseTMConst.ta].toString();
 
       String result =
-          "$formattedDate cellId: $resCellId cqi: $resCqi, rsrq: $resRsrq, rsrp: $resRsrp, rssi: $resRssi, rssnr: $resRssnr, ta: $resTA";
+          "$formattedDate rsrq: $resRsrq, rsrp: $resRsrp, rssi: $resRssi, rssnr: $resRssnr";
+
+      print("$TAG $result");
 
       setState(() {
         _events.insert(0, "$formattedDate\n${tmChanel.toString()}");
@@ -267,11 +360,11 @@ class _RdiTestingState extends State<RdiTesting> {
 
     resAddress = loc;
 
-    // setState(() {
-    //   _events.insert(0,
-    //       "$formattedDate     Latitude: ${position.latitude} , Longitude: ${position.longitude}");
-    //   _events.insert(0, "$formattedDate     Address $loc");
-    // });
+    setState(() {
+      _events.insert(0,
+          "Latitude: ${position.latitude} , Longitude: ${position.longitude}");
+      _events.insert(0, "Address $loc");
+    });
 
     return position;
   }
@@ -304,6 +397,7 @@ class _RdiTestingState extends State<RdiTesting> {
 
     var response = await UserServcies().passDataCit(model);
     _events.insert(0, "$formattedDate has been sending request . . .");
+    _events.insert(0, "$formattedDate response $response");
 
     print('$TAG response $response');
     startTimer();

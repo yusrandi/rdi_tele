@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_internet_speed_test/flutter_internet_speed_test.dart';
 import 'package:rdi_tele/rdi_tele.dart';
 import 'package:rdi_tele_example/rdi_testing.dart';
+import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 
 void main() {
   runApp(const MyApp());
@@ -29,6 +30,8 @@ class _MyAppState extends State<MyApp> {
 
   // Platform messages are asynchronous, so we initialize in an async method.
   Future<void> initPlatformState() async {
+    await AndroidAlarmManager.initialize();
+
     String platformVersion;
     // Platform messages may fail, so we use a try/catch PlatformException.
     // We also handle the message potentially returning null.
@@ -42,7 +45,7 @@ class _MyAppState extends State<MyApp> {
     // If the widget was removed from the tree while the asynchronous platform
     // message was in flight, we want to discard the reply rather than calling
     // setState to update our non-existent appearance.
-    if (!mounted) return;
+    // if (!mounted) return;
 
     // setState(() {
     //   _platformVersion = platformVersion;

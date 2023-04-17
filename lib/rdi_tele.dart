@@ -60,16 +60,15 @@ class RdiTele {
   String resDataConnect = "";
 
   RdiTele() {
-    // initData();
+    initData();
   }
   Future<String?> getPlatformVersion() {
     return RdiTelePlatform.instance.getPlatformVersion();
   }
 
   initData() async {
-    await permissionStatus();
-
-    await initPlatformState();
+    // await permissionStatus();
+    // await initPlatformState();
   }
 
   Future<void> permissionStatus() async {
@@ -90,7 +89,7 @@ class RdiTele {
     try {
       var status = await BackgroundFetch.configure(
           BackgroundFetchConfig(
-              minimumFetchInterval: 5,
+              minimumFetchInterval: 1,
               forceAlarmManager: true,
               stopOnTerminate: false,
               startOnBoot: true,
@@ -129,7 +128,10 @@ class RdiTele {
     // This is the fetch-event callback.
     print("[BackgroundFetch] Event received: $taskId");
     print("[BackgroundFetch] : _onBackgroundFetch $cdate $taskId");
-    todo();
+    Map<dynamic, dynamic> tmChanel = await _rdiTelePlugin.getTM();
+    print("[BackgroundFetch] : tmChanel $cdate $tmChanel");
+
+    // todo();
 
     // when receive task
 

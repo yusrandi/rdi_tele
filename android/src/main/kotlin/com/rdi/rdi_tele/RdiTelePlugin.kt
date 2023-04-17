@@ -32,7 +32,7 @@ class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
   private var context: Context? = null
   
   companion object{
-    const val TAG = "RDI:Andro"
+    const val TAG = "RDI:Testing"
   }
 
 
@@ -90,21 +90,35 @@ class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
 //     Log.e("[RdiTele]", "Andro mPhoneNumber $mPhoneNumber, mSerialNumber $mSerialNumber")
 
   val ss : CellSignalStrengthLte  = tm.signalStrength!!.cellSignalStrengths[0] as CellSignalStrengthLte
-  val cellinfo = tm.allCellInfo[0]
-  val cell : CellIdentityLte  = cellinfo.cellIdentity as CellIdentityLte
-  val cellSignal : CellSignalStrengthLte  = cellinfo.cellSignalStrength as CellSignalStrengthLte
+//       Log.e("[$TAG]", "Andro ss $ss")
+//
+//
+  val cellinfo = tm.allCellInfo
+  var cell : CellIdentityLte? = null
+  var cellSignal : CellSignalStrengthLte? = null
+  if (cellinfo.isNotEmpty()){
+    cell  = cellinfo[0].cellIdentity as CellIdentityLte
+    cellSignal = cellinfo[0].cellSignalStrength as CellSignalStrengthLte
+  }
+//
+//  Log.e(TAG, "Andro : ${ss.rssi} ${cell!!.ci} ${cellSignal!!.timingAdvance}")
 
-  Log.e(TAG, "Andro : ${ss.rssi} ${cell.ci} ${cellSignal.timingAdvance}")
+  var cqi = ss.cqi
+  var cellId = 0
+  var ta = ss.timingAdvance
+  if (cellinfo.isNotEmpty()) cqi = cellSignal!!.cqi
+  if (cellinfo.isNotEmpty()) cellId = cell!!.ci
+  if (cellinfo.isNotEmpty()) ta = cellSignal!!.timingAdvance
 
   hashMap["dbm"] = ss.dbm
-  hashMap["cqi"] = cellSignal.cqi
+  hashMap["cqi"] = cqi
   hashMap["rsrp"] = ss.rsrp
   hashMap["rsrq"] = ss.rsrq
   hashMap["rssnr"] = ss.rssnr
   hashMap["level"] = ss.level
   hashMap["rssi"] = ss.rssi
-  hashMap["cellid"] = cell.ci
-  hashMap["ta"] = cellSignal.timingAdvance
+  hashMap["cellid"] = cellId
+  hashMap["ta"] = ta
 
 
 

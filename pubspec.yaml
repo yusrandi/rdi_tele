@@ -23,6 +23,7 @@ dependencies:
   permission_handler: ^10.2.0
   plugin_platform_interface: ^2.0.2
   telephony: ^0.2.0
+  android_alarm_manager_plus: ^2.1.1
 
 dev_dependencies:
   flutter_test:
