@@ -318,7 +318,7 @@ class _RdiTestingState extends State<RdiTesting> {
       String resTA = tmChanel[UseTMConst.ta].toString();
 
       String result =
-          "$formattedDate rsrq: $resRsrq, rsrp: $resRsrp, rssi: $resRssi, rssnr: $resRssnr";
+          "$formattedDate rsrq: $resRsrq, rsrp: $resRsrp, rssi: $resRssi, rssnr: $resRssnr, cqi: $resCqi ta: $resTA, cellid: $resCellId";
 
       print("$TAG $result");
 
