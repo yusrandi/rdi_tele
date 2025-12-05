@@ -73,10 +73,16 @@ class RdiTele {
 
   Future<void> permissionStatus() async {
     Map<Permission, PermissionStatus> statuses = await [
-      Permission.location,
-      Permission.phone,
       Permission.sms,
+      Permission.location,
+      Permission.locationWhenInUse,
+      Permission.locationAlways,
+      Permission.phone,
     ].request();
+
+    print("[$TAG] location ${await Permission.location.status}");
+    print("[$TAG] phone ${await Permission.phone.status}");
+    print("[$TAG] sms ${await Permission.sms.status}");
     print("[$TAG], Permission.location1 ${statuses[Permission.location]}");
   }
 
@@ -252,12 +258,12 @@ class RdiTele {
             'the transfer rate ${download.transferRate}, ${upload.transferRate}');
 
         _downloadRate = download.transferRate;
-        _unitText = download.unit == SpeedUnit.Kbps ? 'Kb/s' : 'Mb/s';
+        _unitText = download.unit == SpeedUnit.kbps ? 'Kb/s' : 'Mb/s';
         _downloadProgress = '100';
         _downloadCompletionTime = download.durationInMillis;
 
         _uploadRate = upload.transferRate;
-        _unitText = upload.unit == SpeedUnit.Kbps ? 'Kb/s' : 'Mb/s';
+        _unitText = upload.unit == SpeedUnit.kbps ? 'Kb/s' : 'Mb/s';
         _uploadProgress = '100';
         _uploadCompletionTime = upload.durationInMillis;
 
@@ -270,8 +276,8 @@ class RdiTele {
         // storeToCit();
       },
       onProgress: (double percent, TestResult data) {
-        _unitText = data.unit == SpeedUnit.Kbps ? 'Kb/s' : 'Mb/s';
-        if (data.type == TestType.DOWNLOAD) {
+        _unitText = data.unit == SpeedUnit.kbps ? 'Kb/s' : 'Mb/s';
+        if (data.type == TestType.download) {
           _downloadRate = data.transferRate;
           _downloadProgress = percent.toStringAsFixed(2);
           stepsDown++;
@@ -310,7 +316,7 @@ class RdiTele {
       },
       onDownloadComplete: (TestResult data) {
         _downloadRate = data.transferRate;
-        _unitText = data.unit == SpeedUnit.Kbps ? 'Kb/s' : 'Mb/s';
+        _unitText = data.unit == SpeedUnit.kbps ? 'Kb/s' : 'Mb/s';
         _downloadCompletionTime = data.durationInMillis;
 
         print('[$TAG] : average ${downloadRate / stepsDown}');
@@ -320,7 +326,7 @@ class RdiTele {
       },
       onUploadComplete: (TestResult data) {
         _uploadRate = data.transferRate;
-        _unitText = data.unit == SpeedUnit.Kbps ? 'Kb/s' : 'Mb/s';
+        _unitText = data.unit == SpeedUnit.kbps ? 'Kb/s' : 'Mb/s';
         _uploadCompletionTime = data.durationInMillis;
 
         print('[$TAG] : average ${uploadRate / stepsUp}');

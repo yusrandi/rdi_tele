@@ -18,7 +18,9 @@ import 'package:geocoding/geocoding.dart';
 import 'package:rdi_tele/use_services.dart';
 import 'package:rdi_tele/use_tele.dart';
 import 'package:background_fetch/background_fetch.dart';
-import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:rdi_tele_example/services/permission_service.dart';
+import 'package:rdi_tele_example/speed_test.dart';
 
 class RdiTesting extends StatefulWidget {
   const RdiTesting({super.key});
@@ -143,13 +145,25 @@ class _RdiTestingState extends State<RdiTesting> {
   @override
   void initState() {
     super.initState();
-
-    startTimer();
-    todo();
+    Future.microtask(() async {
+      await getData();
+    });
     // tesLooping();
     // initPlatformState();
 
     // alarmManager();
+  }
+
+  Future<void> getData() async {
+    final granted = await PermissionService.requestTelephonyPermissions();
+    if (!granted) {
+      print("[$TAG] Permission denied");
+      return;
+    }
+
+    print("[$TAG] Permission granted");
+    startTimer();
+    todo();
   }
 
   // Be sure to annotate your callback function to avoid issues in release mode on Flutter >= 3.3.0
@@ -167,12 +181,6 @@ class _RdiTestingState extends State<RdiTesting> {
   @pragma('vm:entry-point')
   Future<void> callback() async {
     print("[$TAG] this is callback");
-  }
-
-  void alarmManager() async {
-    final int helloAlarmID = 10;
-    await AndroidAlarmManager.periodic(
-        const Duration(minutes: 1), helloAlarmID, printHello);
   }
 
   @pragma("vm:entry-point")
@@ -253,30 +261,37 @@ class _RdiTestingState extends State<RdiTesting> {
     final minutes = strDigits(myDuration.inMinutes.remainder(60));
     final seconds = strDigits(myDuration.inSeconds.remainder(60));
 
-    return Stack(
+    return Column(
       children: [
-        ListView.builder(
-            itemCount: _events.length,
-            itemBuilder: (BuildContext context, int index) {
-              String timestamp = _events[index];
-              return Container(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(timestamp),
-                    const Divider(),
-                  ],
-                ),
-              );
-            }),
-        Align(
-            alignment: Alignment.bottomRight,
-            child: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text("$minutes : $seconds",
-                  style: Theme.of(context).textTheme.headlineLarge),
-            ))
+        const Expanded(child: SpeedTestPage()),
+        Expanded(
+          child: Stack(
+            children: [
+              ListView.builder(
+                  itemCount: _events.length,
+                  itemBuilder: (BuildContext context, int index) {
+                    String timestamp = _events[index];
+                    return Container(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(timestamp),
+                          const Divider(),
+                        ],
+                      ),
+                    );
+                  }),
+              Align(
+                  alignment: Alignment.bottomRight,
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text("$minutes : $seconds",
+                        style: Theme.of(context).textTheme.headlineLarge),
+                  ))
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -370,36 +385,36 @@ class _RdiTestingState extends State<RdiTesting> {
   }
 
   storeToCit(String formattedDate) async {
-    CitModel model = CitModel(
-        connection: resConnection,
-        cqi: resCqi,
-        signalQuality: resSignalQuality,
-        signalStrength: resSignalStrength,
-        rssnr: resRssnr,
-        upload: resUpload,
-        download: resDownload,
-        jitter: resJitter,
-        rtPing: resRtPing,
-        latPos: resLat,
-        lngPos: resLng,
-        networkType: resNetworkType,
-        networkOperator: resNetworkOperator,
-        uuid: resUuid,
-        cellid: resCellId,
-        brand: resBrand,
-        device: resDevice,
-        model: resModel,
-        address: resAddress,
-        ta: resTA,
-        data: resDataConnect,
-        date: resDateTime,
-        version: resVersion);
+    // CitModel model = CitModel(
+    //     connection: resConnection,
+    //     cqi: resCqi,
+    //     signalQuality: resSignalQuality,
+    //     signalStrength: resSignalStrength,
+    //     rssnr: resRssnr,
+    //     upload: resUpload,
+    //     download: resDownload,
+    //     jitter: resJitter,
+    //     rtPing: resRtPing,
+    //     latPos: resLat,
+    //     lngPos: resLng,
+    //     networkType: resNetworkType,
+    //     networkOperator: resNetworkOperator,
+    //     uuid: resUuid,
+    //     cellid: resCellId,
+    //     brand: resBrand,
+    //     device: resDevice,
+    //     model: resModel,
+    //     address: resAddress,
+    //     ta: resTA,
+    //     data: resDataConnect,
+    //     date: resDateTime,
+    //     version: resVersion);
 
-    var response = await UserServcies().passDataCit(model);
-    _events.insert(0, "$formattedDate has been sending request . . .");
-    _events.insert(0, "$formattedDate response $response");
+    // var response = await UserServcies().passDataCit(model);
+    // _events.insert(0, "$formattedDate has been sending request . . .");
+    // _events.insert(0, "$formattedDate response $response");
 
-    print('$TAG response $response');
+    // print('$TAG response $response');
     startTimer();
   }
 }

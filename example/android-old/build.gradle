@@ -1,0 +1,22 @@
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+
+        // Background Fetch plugin support
+        maven {
+            url "${project(':background_fetch').projectDir}/libs"
+        }
+    }
+}
+
+rootProject.buildDir = '../build'
+
+subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
+}
+
+tasks.register("clean", Delete) {
+    delete rootProject.layout.buildDirectory
+}

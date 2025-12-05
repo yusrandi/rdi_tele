@@ -30,7 +30,7 @@ class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
   /// when the Flutter Engine is detached from the Activity
   private lateinit var channel : MethodChannel
   private var context: Context? = null
-  
+
   companion object{
     const val TAG = "RDI:Testing"
   }
@@ -83,43 +83,137 @@ class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
   private fun getTM():HashMap<String, Int>{
     var hashMap : HashMap<String, Int>
             = HashMap()
-    val tm: TelephonyManager = context!!.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
-//     val mPhoneNumber: String = tm.line1Number
-//     val mSerialNumber: String = tm.simSerialNumber
 
-//     Log.e("[RdiTele]", "Andro mPhoneNumber $mPhoneNumber, mSerialNumber $mSerialNumber")
+            // CHECK PERMISSIONS FIRST
+    if (context == null ||
+        androidx.core.app.ActivityCompat.checkSelfPermission(
+            context!!,
+            android.Manifest.permission.ACCESS_FINE_LOCATION
+        ) != android.content.pm.PackageManager.PERMISSION_GRANTED ||
+        androidx.core.app.ActivityCompat.checkSelfPermission(
+            context!!,
+            android.Manifest.permission.READ_PHONE_STATE
+        ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+    ) {
+        Log.e(TAG, "Permission not granted!")
+        return hashMap // return empty
+    }
 
-  val ss : CellSignalStrengthLte  = tm.signalStrength!!.cellSignalStrengths[0] as CellSignalStrengthLte
-//       Log.e("[$TAG]", "Andro ss $ss")
-//
-//
-  val cellinfo = tm.allCellInfo
-  var cell : CellIdentityLte? = null
-  var cellSignal : CellSignalStrengthLte? = null
-  if (cellinfo.isNotEmpty()){
-    cell  = cellinfo[0].cellIdentity as CellIdentityLte
-    cellSignal = cellinfo[0].cellSignalStrength as CellSignalStrengthLte
-  }
-//
-//  Log.e(TAG, "Andro : ${ss.rssi} ${cell!!.ci} ${cellSignal!!.timingAdvance}")
 
-  var cqi = ss.cqi
-  var cellId = 0
-  var ta = ss.timingAdvance
-  if (cellinfo.isNotEmpty()) cqi = cellSignal!!.cqi
-  if (cellinfo.isNotEmpty()) cellId = cell!!.ci
-  if (cellinfo.isNotEmpty()) ta = cellSignal!!.timingAdvance
+    try {
+        val tm: TelephonyManager = context!!.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+        val cellInfoList = tm.allCellInfo
 
-  hashMap["dbm"] = ss.dbm
-  hashMap["cqi"] = cqi
-  hashMap["rsrp"] = ss.rsrp
-  hashMap["rsrq"] = ss.rsrq
-  hashMap["rssnr"] = ss.rssnr
-  hashMap["level"] = ss.level
-  hashMap["rssi"] = ss.rssi
-  hashMap["cellid"] = cellId
-  hashMap["ta"] = ta
+        if (cellInfoList.isEmpty()) {
+            Log.e(TAG, "No cell info available")
+            return hashMap
+        }
 
+        val primaryCellInfo = cellInfoList[0]
+        val signalStrength = primaryCellInfo.cellSignalStrength
+
+        // Initialize with default values
+        var dbm = -1
+        var cqi = -1
+        var rsrp = -1
+        var rsrq = -1
+        var rssnr = -1
+        var level = -1
+        var rssi = -1
+        var cellId = -1
+        var ta = -1
+
+        // Handle different network types
+        when (signalStrength) {
+            is CellSignalStrengthLte -> {
+                dbm = signalStrength.dbm
+                cqi = signalStrength.cqi
+                rsrp = signalStrength.rsrp
+                rsrq = signalStrength.rsrq
+                rssnr = signalStrength.rssnr
+                level = signalStrength.level
+                rssi = signalStrength.rssi
+                ta = signalStrength.timingAdvance
+
+                // Get cell identity for LTE
+                val cellIdentity = primaryCellInfo.cellIdentity as? CellIdentityLte
+                cellId = cellIdentity?.ci ?: -1
+            }
+            is CellSignalStrengthNr -> {
+                dbm = signalStrength.dbm
+
+                // CQI might not be available in all Android versions for NR
+                // cqi = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                //     signalStrength.cqi
+                // } else {
+                //     -1
+                // }
+
+                rsrp = signalStrength.ssRsrp
+                rsrq = signalStrength.ssRsrq
+                rssnr = signalStrength.ssSinr
+                level = signalStrength.level
+
+                // NR doesn't have rssi and timingAdvance in the same way
+                rssi = -1 // Not available in NR
+                ta = -1 // Not available in NR
+
+                // Get cell identity for NR
+                val cellIdentity = primaryCellInfo.cellIdentity as? CellIdentityNr
+                cellId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    cellIdentity?.nci?.toInt() ?: -1
+                } else {
+                    -1
+                }
+            }
+            is CellSignalStrengthWcdma -> {
+                dbm = signalStrength.dbm
+                level = signalStrength.level
+                // WCDMA specific parameters
+                rsrp = -1
+                rsrq = -1
+                rssnr = -1
+                rssi = -1
+                ta = -1
+
+                val cellIdentity = primaryCellInfo.cellIdentity as? CellIdentityWcdma
+                cellId = cellIdentity?.cid ?: -1
+            }
+            is CellSignalStrengthGsm -> {
+                dbm = signalStrength.dbm
+                level = signalStrength.level
+                // GSM specific parameters
+                rsrp = -1
+                rsrq = -1
+                rssnr = -1
+                rssi = -1
+                ta = -1
+
+                val cellIdentity = primaryCellInfo.cellIdentity as? CellIdentityGsm
+                cellId = cellIdentity?.cid ?: -1
+            }
+            else -> {
+                Log.w(TAG, "Unsupported network type: ${signalStrength.javaClass.simpleName}")
+                // Fallback to basic signal strength
+                dbm = signalStrength.dbm
+                level = signalStrength.level
+            }
+        }
+
+        // Populate the hashmap
+        hashMap["dbm"] = dbm
+        hashMap["cqi"] = cqi
+        hashMap["rsrp"] = rsrp
+        hashMap["rsrq"] = rsrq
+        hashMap["rssnr"] = rssnr
+        hashMap["level"] = level
+        hashMap["rssi"] = rssi
+        hashMap["cellid"] = cellId
+        hashMap["ta"] = ta
+
+    } catch (e: Exception) {
+        Log.e(TAG, "Error getting telephony metrics: ${e.message}", e)
+    }
 
 
 //  val cellInfoList: List<CellInfo> = tm.allCellInfo
@@ -264,7 +358,7 @@ class RdiTelePlugin: FlutterPlugin, MethodCallHandler {
 //    Log.d(TAG, "pingResult : $pingResult")
 
     return dataNVT
-    
+
   }
 
   private fun waitingTime(avgRes: String): String {
