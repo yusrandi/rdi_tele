@@ -2,7 +2,7 @@ name: realspeed_analyzer
 description: "Professional Network Analyzer with Signal Monitoring & Speed Test"
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
-version: 1.1.0+2
+version: 2.0.0+4
 
 environment:
   sdk: ^3.10.1
@@ -22,6 +22,11 @@ dependencies:
   geolocator: ^14.0.2
 
   cupertino_icons: ^1.0.8
+  fl_chart: ^1.1.1
+  upgrader: ^13.1.0
+  flutter_foreground_task: ^9.2.2
+  speed_test_dart: ^1.0.5+0
+  flutter_internet_speed_test_pro: ^1.5.1
 
 dev_dependencies:
   flutter_test:

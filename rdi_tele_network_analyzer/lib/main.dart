@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:realspeed_analyzer/integrated_network_dashboard.dart';
 import 'package:realspeed_analyzer/screens/privacy_policy_screen.dart';
+import 'package:realspeed_analyzer/services/location_permission_service.dart';
 import 'package:realspeed_analyzer/services/permission_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:upgrader/upgrader.dart';
 
 void main() {
   runApp(const MyApp());
@@ -35,6 +37,8 @@ class _AppEntryPointState extends State<AppEntryPoint> {
   bool _showPrivacyPolicy = false;
   bool _permissionsGranted = false;
 
+  bool _showBackgroundLocationDialog = false;
+
   @override
   void initState() {
     super.initState();
@@ -47,16 +51,13 @@ class _AppEntryPointState extends State<AppEntryPoint> {
     final permissionsAsked = prefs.getBool('permissions_asked') ?? false;
 
     if (isFirstLaunch) {
-      // First time launch, show privacy policy
       setState(() {
         _isLoading = false;
         _showPrivacyPolicy = true;
       });
     } else if (!permissionsAsked) {
-      // Not first launch but haven't asked permissions
       _requestPermissions();
     } else {
-      // Already have permissions, go to main app
       _checkPermissionsAndNavigate();
     }
   }
@@ -69,45 +70,39 @@ class _AppEntryPointState extends State<AppEntryPoint> {
       _showPrivacyPolicy = false;
     });
 
-    // Request permissions after agreeing
     _requestPermissions();
   }
 
   Future<void> _requestPermissions() async {
     final granted = await PermissionService.requestTelephonyPermissions();
+    final locationGranted = await LocationPermissionService.request();
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('permissions_asked', true);
 
-    if (granted) {
-      // Permissions granted, go to main app
+    if (granted && locationGranted) {
+      // ← Minta background location setelah foreground granted
       setState(() {
+        _showBackgroundLocationDialog = true;
         _permissionsGranted = true;
+        _isLoading = false;
       });
     } else {
-      // Permissions not granted, show manual permission screen
       setState(() {
         _permissionsGranted = false;
+        _isLoading = false;
       });
     }
   }
 
   Future<void> _checkPermissionsAndNavigate() async {
-    // Check if permissions are already granted
     final locationStatus = await Permission.location.status;
     final phoneStatus = await Permission.phone.status;
 
-    if (locationStatus.isGranted && phoneStatus.isGranted) {
-      setState(() {
-        _permissionsGranted = true;
-        _isLoading = false;
-      });
-    } else {
-      setState(() {
-        _permissionsGranted = false;
-        _isLoading = false;
-      });
-    }
+    setState(() {
+      _permissionsGranted = locationStatus.isGranted && phoneStatus.isGranted;
+      _isLoading = false;
+    });
   }
 
   @override
@@ -124,7 +119,6 @@ class _AppEntryPointState extends State<AppEntryPoint> {
       return ManualPermissionScreen(
         onRetry: _requestPermissions,
         onSkip: () {
-          // User can skip but with limited functionality
           setState(() {
             _permissionsGranted = true;
           });
@@ -132,12 +126,174 @@ class _AppEntryPointState extends State<AppEntryPoint> {
       );
     }
 
-    // All good, show main app
-    return const IntegratedNetworkDashboard();
+    return UpgradeAlert(
+      dialogStyle: UpgradeDialogStyle.cupertino,
+      showIgnore: false,
+      showLater: false,
+      upgrader: Upgrader(
+        // Set to false to disable debug logging in production
+        debugLogging: true,
+        // Show alert on every launch until user updates
+        durationUntilAlertAgain: const Duration(days: 1),
+        // Minimum version can be set server-side via store listing
+        languageCode: 'id',
+        countryCode: 'ID',
+        messages: UpgraderMessages(code: 'id'),
+        minAppVersion: '2.0.0',
+      ),
+      // Force update: remove all dismiss options
+      barrierDismissible: false,
+      child: const IntegratedNetworkDashboard(),
+    );
   }
 }
 
-// Splash Screen
+// ── Widget untuk request background location ──────────────
+
+class _BackgroundLocationWrapper extends StatefulWidget {
+  final bool showDialog;
+  final VoidCallback onDone;
+  final Widget child;
+
+  const _BackgroundLocationWrapper({
+    required this.showDialog,
+    required this.onDone,
+    required this.child,
+  });
+
+  @override
+  State<_BackgroundLocationWrapper> createState() =>
+      _BackgroundLocationWrapperState();
+}
+
+class _BackgroundLocationWrapperState
+    extends State<_BackgroundLocationWrapper> {
+  @override
+  void initState() {
+    super.initState();
+    if (widget.showDialog) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showBackgroundLocationDialog();
+      });
+    }
+  }
+
+  Future<void> _showBackgroundLocationDialog() async {
+    // Cek apakah sudah granted
+    final already = await PermissionService.isBackgroundLocationGranted();
+    if (already || !mounted) {
+      widget.onDone();
+      return;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(Icons.location_on, color: Colors.red.shade700),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Izin Lokasi Background',
+                style: TextStyle(fontSize: 16),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.orange.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    color: Colors.orange.shade700,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Diperlukan untuk monitoring sinyal & GPS saat '
+                      'aplikasi berjalan di background.',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Pada layar berikutnya, pilih:',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 8),
+            _permStep(
+              '"Izinkan Setiap Saat"',
+              Icons.check_circle,
+              Colors.green,
+            ),
+            _permStep('Bukan "Hanya saat digunakan"', Icons.cancel, Colors.red),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              widget.onDone();
+            },
+            child: Text(
+              'Lewati',
+              style: TextStyle(color: Colors.grey.shade600),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            onPressed: () async {
+              Navigator.pop(context);
+              await PermissionService.requestBackgroundLocation();
+              widget.onDone();
+            },
+            child: const Text('Izinkan', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _permStep(String text, IconData icon, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 8),
+          Text(text, style: const TextStyle(fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
+// ─── Splash Screen ────────────────────────────────────────────────────────────
 class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
 
@@ -150,7 +306,6 @@ class SplashScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Spacer(),
-            // App Logo
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
@@ -171,7 +326,7 @@ class SplashScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 40),
-            Text(
+            const Text(
               'REAL SPEED ANALYZER',
               style: TextStyle(
                 fontSize: 28,
@@ -198,7 +353,7 @@ class SplashScreen extends StatelessWidget {
   }
 }
 
-// Manual Permission Screen (if user denies initially)
+// ─── Manual Permission Screen ─────────────────────────────────────────────────
 class ManualPermissionScreen extends StatelessWidget {
   final VoidCallback onRetry;
   final VoidCallback onSkip;
@@ -258,9 +413,7 @@ class ManualPermissionScreen extends StatelessWidget {
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed: () async {
-                      // Open app settings
                       await openAppSettings();
-                      // Try again after settings
                       onRetry();
                     },
                     style: ElevatedButton.styleFrom(

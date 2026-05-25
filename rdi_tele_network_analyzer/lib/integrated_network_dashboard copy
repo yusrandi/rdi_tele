@@ -3,6 +3,7 @@ import 'dart:developer';
 import 'dart:io';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_internet_speed_test/flutter_internet_speed_test.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:rdi_tele/models/telephony_info_model.dart';
@@ -18,8 +19,6 @@ import 'package:realspeed_analyzer/widget/device_info_card.dart';
 import 'package:realspeed_analyzer/widget/scatter_chart_signal.dart';
 import 'package:realspeed_analyzer/widget/serving_cell_card.dart';
 import 'package:realspeed_analyzer/widget/sim_info_card.dart';
-import 'package:realspeed_analyzer/service/foreground_service_manager.dart';
-import 'package:flutter_internet_speed_test_pro/flutter_internet_speed_test_pro.dart';
 
 class IntegratedNetworkDashboard extends StatefulWidget {
   const IntegratedNetworkDashboard({super.key});
@@ -29,42 +28,31 @@ class IntegratedNetworkDashboard extends StatefulWidget {
       _IntegratedNetworkDashboardState();
 }
 
-class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
-    with WidgetsBindingObserver {
+class _IntegratedNetworkDashboardState
+    extends State<IntegratedNetworkDashboard> {
   static const String TAG = "NetworkDashboard";
-  static const int _sessionDurationSeconds = 180;
 
-  // ── Plugins ──────────────────────────────────────────
+  // Telephony
   final _useTele = UseTele();
   final _rdiTelePlugin = MethodChannelRdiTele();
+  Timer? _telephonyTimer;
+
+  // Speed Test
   final _speedTest = FlutterInternetSpeedTest();
-  final _captureService = CaptureService();
-  final _logger = NetworkLogger();
 
-  // ── Theme ─────────────────────────────────────────────
-  final Color _primaryRed = const Color(0xFFE53935);
-  final Color _darkRed = const Color(0xFFB71C1C);
-  final Color _lightRed = const Color(0xFFFFCDD2);
-  final Color _accentOrange = const Color(0xFFFF9800);
+  // Theme Colors (Red Theme)
+  final Color _primaryRed = const Color(0xFFE53935); // Vibrant Red
+  final Color _darkRed = const Color(0xFFB71C1C); // Dark Red
+  final Color _lightRed = const Color(0xFFFFCDD2); // Light Red
+  final Color _accentOrange = const Color(0xFFFF9800); // Orange for accents
 
-  // ── Session State ────────────────────────────────────
+  // State Variables
   bool _isTesting = false;
   bool _isMonitoring = false;
-  bool _isLooping = false;
-  bool _speedTestDone = false;
-  int _sessionCount = 0;
-  int _remainingSeconds = _sessionDurationSeconds;
-  DateTime? _sessionStartTime;
-  DateTime? _sessionStartedAt;
-
-  // ── Timers ───────────────────────────────────────────
-  Timer? _telephonyTimer;
+  //   Duration _sessionDuration = const Duration(minutes: 3);
   Timer? _sessionTimer;
-  Timer? _countdownTimer;
-  Timer? _dialogCountdownTimer;
-  Timer? _dialogAutoCloseTimer;
 
-  // ── Telephony State ──────────────────────────────────
+  // Telephony Data
   String _networkType = "Unknown";
   String _operatorName = "Unknown";
   String _deviceModel = "Unknown";
@@ -75,13 +63,8 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
   int _currentSNR = 0;
   int _currentCellId = 0;
   List<TelephonySnapshot> _telemetryHistory = [];
-  SimInfo? _simInfo;
-  DeviceInfo? _deviceInfo;
-  ServingCell? _servingCell;
-  CellularInfo? _cellularInfo;
-  List<NeighbourCell> _neighbourCells = [];
 
-  // ── Speed Test State ─────────────────────────────────
+  // Speed Test Data
   double _downloadSpeed = 0;
   double _uploadSpeed = 0;
   double _ping = 0;
@@ -89,73 +72,145 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
   double _uploadProgress = 0;
   bool _speedTestRunning = false;
   String _speedUnit = 'Mbps';
+
+  // Server Info
   String? _serverIp;
   String? _serverIsp;
   String? _serverLocation;
 
-  // ── GPS ──────────────────────────────────────────────
-  StreamSubscription<Position>? _positionStream;
-  List<Position> positions = [];
-
-  // ── Sessions History ─────────────────────────────────
+  // Test Results
   final List<TestSession> _testSessions = [];
 
-  // ─────────────────────────────────────────────────────
-  // LIFECYCLE
-  // ─────────────────────────────────────────────────────
+  StreamSubscription<Position>? positionStream;
+  List<Position> positions = [];
+
+  // Inisialisasi logger
+  final NetworkLogger _logger = NetworkLogger();
+  SimInfo? _simInfo;
+  DeviceInfo? _deviceInfo;
+  ServingCell? _servingCell;
+  CellularInfo? _cellularInfo;
+  List<NeighbourCell> _neighbourCells = [];
+
+  final _captureService = CaptureService();
+  DateTime? _sessionStartedAt;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    ForegroundServiceManager.init();
     _initializeApp();
     _initializeAppTestTelephony();
   }
 
+  Future<void> _initializeAppTestTelephony() async {
+    // final deviceInfo = await _rdiTelePlugin.getDeviceInfo();
+
+    final raw = await _rdiTelePlugin.getAllTelephonyInfo();
+
+    final telephony = TelephonyInfo.fromMap(Map<String, dynamic>.from(raw));
+    final neighbourCells = await _rdiTelePlugin.getNeighbourCells();
+    final servingCell = await _rdiTelePlugin.getServingCell();
+    final cellularInfo = await _rdiTelePlugin.getCellularInfo();
+    final simInfo = await _rdiTelePlugin.getSimInfo();
+    setState(() {
+      _simInfo = SimInfo.fromMap(Map<String, dynamic>.from(simInfo));
+      _deviceInfo = telephony.deviceInfo;
+      _servingCell = ServingCell.fromMap(
+        Map<String, dynamic>.from(servingCell),
+      );
+      _neighbourCells = neighbourCells
+          .map((cell) => NeighbourCell.fromMap(cell))
+          .toList();
+
+      _cellularInfo = CellularInfo.fromMap(
+        Map<String, dynamic>.from(cellularInfo),
+      );
+
+      //   _neighbourCells = [
+      //     NeighbourCell(
+      //       ci: 123456,
+      //       pci: 100,
+      //       tac: 200,
+      //       rsrp: -95,
+      //       rsrq: -10,
+      //       networkType: "LTE",
+      //     ),
+      //     NeighbourCell(
+      //       ci: 123457,
+      //       pci: 101,
+      //       tac: 201,
+      //       rsrp: -105,
+      //       rsrq: -12,
+      //       networkType: "LTE",
+      //     ),
+      //     NeighbourCell(
+      //       ci: 123458,
+      //       pci: 102,
+      //       tac: 202,
+      //       rsrp: -85,
+      //       rsrq: -8,
+      //       networkType: "LTE",
+      //     ),
+      //   ];
+    });
+
+    // print("$TAG Device Info: $deviceInfo");
+    // print("$TAG SIM Info: $simInfo");
+    // print("$TAG Cellular Info: $cellularInfo");
+    log("$TAG Neighbour Cells Info: $neighbourCells");
+    log("$TAG Serving Cell Info: $servingCell");
+    log("$TAG All Telephony Info: $raw");
+    // log("$TAG SIM Info: ${telephony.simInfo.toString()}");
+    // log("$TAG Telephony SIM Info: ${telephony.simInfo.toString()}");
+  }
+
+  void startTracking() {
+    _logger.location('Starting GPS tracking...');
+
+    positionStream =
+        Geolocator.getPositionStream(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            distanceFilter: 10, // update tiap pindah 10 meter
+          ),
+        ).listen((Position position) {
+          print('$TAG : Lat: ${position.latitude}, Lng: ${position.longitude}');
+
+          _logger.location(
+            'Lat: ${position.latitude.toStringAsFixed(5)}, '
+            'Lng: ${position.longitude.toStringAsFixed(5)}, '
+            'Accuracy: ${position.accuracy.toStringAsFixed(2)}m, '
+            'Altitude: ${position.altitude.toStringAsFixed(2)}m, '
+            'Speed: ${position.speed.toStringAsFixed(2)}m/s, ',
+          );
+
+          positions.add(position);
+        });
+  }
+
+  void stopTracking() {
+    _logger.location('GPS tracking stopped');
+    positionStream?.cancel();
+  }
+
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _cancelAllTimers();
+    _telephonyTimer?.cancel();
+    _sessionTimer?.cancel();
     _speedTest.cancelTest();
-    _positionStream?.cancel();
-    ForegroundServiceManager.removeDataCallback(_onReceiveTaskData);
-    ForegroundServiceManager.stop();
-    _rdiTelePlugin.stopTelephonyService();
     super.dispose();
   }
 
-  /// Sync countdown saat kembali dari background
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      if (_isLooping && _isTesting && _sessionStartTime != null) {
-        final elapsed = DateTime.now().difference(_sessionStartTime!).inSeconds;
-        final remaining = (_sessionDurationSeconds - elapsed).clamp(
-          0,
-          _sessionDurationSeconds,
-        );
-        if (mounted) setState(() => _remainingSeconds = remaining);
-
-        // Jika sudah timeout saat di background, langsung complete
-        if (remaining <= 0 && _isTesting) {
-          _countdownTimer?.cancel();
-          _onSessionTimeout();
-        }
-      }
-    }
+  Future<void> _initializeApp() async {
+    await _loadDeviceInfo();
   }
 
-  // ─────────────────────────────────────────────────────
-  // INITIALIZE
-  // ─────────────────────────────────────────────────────
+  Future<void> _loadDeviceInfo() async {
+    if (Platform.isAndroid) {
+      _networkType = _useTele.networkType;
+      _operatorName = _useTele.operatorName;
 
-  Future<void> _initializeApp() async {
-    if (!Platform.isAndroid) return;
-    _networkType = _useTele.networkType;
-    _operatorName = _useTele.operatorName;
-    final deviceInfo = await _rdiTelePlugin.getDeviceInfo();
-    if (mounted) {
+      final deviceInfo = await _rdiTelePlugin.getDeviceInfo();
       setState(() {
         _deviceModel =
             deviceInfo[UseDeviceInfoConst.myDeviceModel] ?? "Unknown";
@@ -163,234 +218,62 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
     }
   }
 
-  Future<void> _initializeAppTestTelephony() async {
-    try {
-      final raw = await _rdiTelePlugin.getAllTelephonyInfo();
-      final telephony = TelephonyInfo.fromMap(Map<String, dynamic>.from(raw));
-      final neighbourCells = await _rdiTelePlugin.getNeighbourCells();
-      final servingCell = await _rdiTelePlugin.getServingCell();
-      final cellularInfo = await _rdiTelePlugin.getCellularInfo();
-      final simInfo = await _rdiTelePlugin.getSimInfo();
-      if (!mounted) return;
-      setState(() {
-        _simInfo = SimInfo.fromMap(Map<String, dynamic>.from(simInfo));
-        _deviceInfo = telephony.deviceInfo;
-        _servingCell = ServingCell.fromMap(
-          Map<String, dynamic>.from(servingCell),
-        );
-        _neighbourCells = neighbourCells
-            .map((c) => NeighbourCell.fromMap(c))
-            .toList();
-        _cellularInfo = CellularInfo.fromMap(
-          Map<String, dynamic>.from(cellularInfo),
-        );
-      });
-      log("$TAG Neighbour Cells: $neighbourCells");
-      log("$TAG Serving Cell: $servingCell");
-    } catch (e) {
-      _logger.error('Init telephony failed: $e');
-    }
-  }
+  void _startIntegratedTest() {
+    if (_isTesting) return;
+    _logger.session('Starting integrated test...');
+    setState(() {
+      _sessionStartedAt = DateTime.now();
+      _isTesting = true;
+      _isMonitoring = true;
+      //   _sessionDuration = const Duration(minutes: 3);
+      _telemetryHistory.clear();
+      _uploadSpeed = 0;
+      _downloadSpeed = 0;
+      _ping = 0;
+      _downloadProgress = 0;
+      _uploadProgress = 0;
+      _currentCellId = 0;
+      _currentRsrp = 0;
+      _currentRsrq = 0;
+      _currentRssi = 0;
+      _currentSNR = 0;
+      _currentSignal = "N/A";
+      _serverIp = null;
+      _serverIsp = null;
+      _serverLocation = null;
+    });
 
-  // ─────────────────────────────────────────────────────
-  // FOREGROUND SERVICE CALLBACK
-  // ─────────────────────────────────────────────────────
-
-  void _onReceiveTaskData(Object data) {
-    if (data is! Map<String, dynamic>) return;
-    // Hanya handle stop dari notifikasi
-    // Countdown dihandle _countdownTimer (DateTime-based)
-    if (data['type'] == 'stop_requested' && mounted) {
-      _stopIntegratedTest();
-    }
-  }
-
-  // ─────────────────────────────────────────────────────
-  // GPS
-  // ─────────────────────────────────────────────────────
-
-  void _startTracking() {
-    _logger.location('Starting GPS tracking...');
-    _positionStream =
-        Geolocator.getPositionStream(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.high,
-            distanceFilter: 10,
-          ),
-        ).listen((pos) {
-          _logger.location(
-            'Lat: ${pos.latitude.toStringAsFixed(5)}, '
-            'Lng: ${pos.longitude.toStringAsFixed(5)}, '
-            'Acc: ${pos.accuracy.toStringAsFixed(1)}m',
-          );
-          positions.add(pos);
-        });
-  }
-
-  void _stopTracking() {
-    _logger.location('GPS tracking stopped');
-    _positionStream?.cancel();
-  }
-
-  // ─────────────────────────────────────────────────────
-  // START / STOP
-  // ─────────────────────────────────────────────────────
-
-  void _startIntegratedTest() async {
-    if (_isTesting || _isLooping) return;
-
-    // 1. Start native telephony service → getTM() tetap akurat saat background
-    await _rdiTelePlugin.startTelephonyService();
-
-    // 2. Start flutter foreground service → notifikasi + keep-alive
-    final started = await ForegroundServiceManager.start();
-    if (!started) {
-      _showSnackBar('❌ Permission foreground service ditolak', Colors.red);
-      await _rdiTelePlugin.stopTelephonyService();
-      return;
-    }
-
-    ForegroundServiceManager.addDataCallback(_onReceiveTaskData);
-    _isLooping = true;
-    _sessionCount = 0;
-    _startNewSession();
-  }
-
-  void _startNewSession() {
-    if (!_isLooping) return;
-
-    _logger.session('Starting session #${_sessionCount + 1}...');
-    ForegroundServiceManager.resetTimer();
-
-    positions.clear();
-    _speedTestDone = false;
-
-    if (mounted) {
-      setState(() {
-        _sessionStartedAt = DateTime.now();
-        _isTesting = true;
-        _isMonitoring = true;
-        _remainingSeconds = _sessionDurationSeconds;
-        _telemetryHistory.clear();
-        _uploadSpeed = 0;
-        _downloadSpeed = 0;
-        _ping = 0;
-        _downloadProgress = 0;
-        _uploadProgress = 0;
-        _currentCellId = 0;
-        _currentRsrp = 0;
-        _currentRsrq = 0;
-        _currentRssi = 0;
-        _currentSNR = 0;
-        _currentSignal = "N/A";
-        _serverIp = null;
-        _serverIsp = null;
-        _serverLocation = null;
-      });
-    }
-
+    // Start telephony monitoring
     _startTelemetryMonitoring();
-    _startTracking();
-    _startCountdown();
+    startTracking();
 
+    // Start session timer
+    // _startSessionTimer();
+
+    // Start speed test after 2 seconds
     Future.delayed(const Duration(seconds: 2), () {
-      if (!_isLooping) return;
-      _logger.speed('Initiating speed test session #${_sessionCount + 1}...');
+      _logger.speed('Initiating speed test...');
       _runSpeedTest();
     });
   }
 
   void _stopIntegratedTest() {
-    if (!_isTesting && !_isLooping) return;
+    if (!_isTesting) return;
 
-    _logger.session('Stopping all sessions');
-    _cancelAllTimers();
+    _logger.session('Stopping test session');
+    setState(() {
+      _isTesting = false;
+      _isMonitoring = false;
+      _speedTestRunning = false;
+    });
 
-    if (mounted && Navigator.canPop(context)) {
-      Navigator.pop(context);
-    }
-
-    _isLooping = false;
-
-    if (mounted) {
-      setState(() {
-        _isTesting = false;
-        _isMonitoring = false;
-        _speedTestRunning = false;
-        _remainingSeconds = _sessionDurationSeconds;
-      });
-    }
-
-    _speedTest.cancelTest();
-    _stopTracking();
-    _rdiTelePlugin.stopTelephonyService();
-    ForegroundServiceManager.removeDataCallback(_onReceiveTaskData);
-    ForegroundServiceManager.stop();
-  }
-
-  void _cancelAllTimers() {
     _telephonyTimer?.cancel();
     _sessionTimer?.cancel();
-    _countdownTimer?.cancel();
-    _dialogCountdownTimer?.cancel();
-    _dialogAutoCloseTimer?.cancel();
-  }
-
-  // ─────────────────────────────────────────────────────
-  // COUNTDOWN — DateTime based, akurat saat background
-  // ─────────────────────────────────────────────────────
-
-  void _startCountdown() {
-    _countdownTimer?.cancel();
-    _sessionStartTime = DateTime.now();
-    _remainingSeconds = _sessionDurationSeconds;
-
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-
-      // DateTime.difference → tidak terpengaruh Timer slowdown saat background
-      final elapsed = DateTime.now().difference(_sessionStartTime!).inSeconds;
-      final remaining = (_sessionDurationSeconds - elapsed).clamp(
-        0,
-        _sessionDurationSeconds,
-      );
-
-      setState(() => _remainingSeconds = remaining);
-
-      if (remaining <= 0) {
-        timer.cancel();
-        _onSessionTimeout();
-      }
-    });
-  }
-
-  // ─────────────────────────────────────────────────────
-  // SESSION TIMEOUT — dipanggil saat 3 menit habis
-  // ─────────────────────────────────────────────────────
-
-  void _onSessionTimeout() {
-    if (!_isTesting && !_isMonitoring) return;
-
-    _logger.session('Session timeout — wrapping up...');
-
-    _countdownTimer?.cancel();
-    _telephonyTimer?.cancel();
-    _stopTracking();
-
-    if (_speedTestRunning) {
-      _speedTest.cancelTest();
-      if (mounted) setState(() => _speedTestRunning = false);
-    }
+    _speedTest.cancelTest();
+    stopTracking();
 
     _completeTestSession();
   }
-
-  // ─────────────────────────────────────────────────────
-  // TELEMETRY
-  // ─────────────────────────────────────────────────────
 
   void _startTelemetryMonitoring() {
     _telephonyTimer?.cancel();
@@ -403,8 +286,6 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
     if (!_isMonitoring || !Platform.isAndroid) return;
 
     try {
-      // getTM() ambil dari cache TelephonyForegroundService jika running
-      // → tidak null meski app di-background
       final tmData = await _rdiTelePlugin.getTM();
       final neighbourCells = await _rdiTelePlugin.getNeighbourCells();
       final servingCell = await _rdiTelePlugin.getServingCell();
@@ -412,6 +293,7 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
       final simInfo = await _rdiTelePlugin.getSimInfo();
 
       final now = DateTime.now();
+
       final snapshot = TelephonySnapshot(
         timestamp: now,
         rsrp: tmData[UseTMConst.rsrp] as int? ?? 0,
@@ -432,7 +314,7 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
           Map<String, dynamic>.from(cellularInfo),
         ),
         neighbourCells: neighbourCells
-            .map((c) => NeighbourCell.fromMap(c))
+            .map((cell) => NeighbourCell.fromMap(cell))
             .toList(),
       );
 
@@ -441,16 +323,16 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
       );
 
       _logger.telephony(
-        'RSRP: ${snapshot.rsrp} dBm | RSRQ: ${snapshot.rsrq} dB | '
-        'RSSI: ${snapshot.rssi} dBm | Cell: ${snapshot.cellId}',
+        'RSRP: ${snapshot.rsrp} dBm | '
+        'RSRQ: ${snapshot.rsrq} dB | '
+        'RSSI: ${snapshot.rssi} dBm | '
+        'Cell: ${snapshot.cellId}',
       );
       _logger.servingCell(
-        'MCC: ${servMap.mcc} | MNC: ${servMap.mnc} | CID: ${servMap.ci} | '
-        'PCI: ${servMap.pci} | RSRP: ${servMap.rsrp} dBm | '
-        'RSRQ: ${servMap.rsrq} dB | RSSI: ${servMap.rssi} dBm',
+        'MCC: ${servMap.mcc} | MNC: ${servMap.mnc} | '
+        'CID: ${servMap.ci} | PCI: ${servMap.pci} | RSRP: ${servMap.rsrp} dBm | RSRQ: ${servMap.rsrq} dB | RSSI: ${servMap.rssi} dBm ',
       );
 
-      if (!mounted) return;
       setState(() {
         _currentRsrp = snapshot.rsrp;
         _currentRsrq = snapshot.rsrq;
@@ -458,113 +340,140 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
         _currentSNR = snapshot.rssnr;
         _currentCellId = snapshot.cellId;
         _currentSignal = "${snapshot.dbm} dBm";
+
         _telemetryHistory.insert(0, snapshot);
+
         _servingCell = servMap;
+
         _neighbourCells = neighbourCells
-            .map((c) => NeighbourCell.fromMap(c))
+            .map((cell) => NeighbourCell.fromMap(cell))
             .toList();
+
         _cellularInfo = CellularInfo.fromMap(
           Map<String, dynamic>.from(cellularInfo),
         );
         _simInfo = SimInfo.fromMap(Map<String, dynamic>.from(simInfo));
-        if (_telemetryHistory.length > 30) _telemetryHistory.removeLast();
+
+        // Keep last 30 snapshots
+        if (_telemetryHistory.length > 30) {
+          _telemetryHistory.removeLast();
+        }
       });
     } catch (e) {
+      print("[$TAG] Telemetry error: $e");
       _logger.error('Telemetry update failed: $e');
     }
   }
 
-  // ─────────────────────────────────────────────────────
-  // SPEED TEST
-  // ─────────────────────────────────────────────────────
+  void _startSessionTimer() {
+    _sessionTimer?.cancel();
+    _sessionTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      //   setState(() {
+      //     // final seconds = _sessionDuration.inSeconds - 1;
+      //     // if (seconds <= 0) {
+      //     //   timer.cancel();
+      //     //   _completeTestSession();
+      //     // } else {
+      //     //   _sessionDuration = Duration(seconds: seconds);
+      //     // }
+      //   });
+    });
+  }
 
   Future<void> _runSpeedTest() async {
     if (_speedTestRunning) return;
-    if (mounted) setState(() => _speedTestRunning = true);
+
+    setState(() => _speedTestRunning = true);
 
     await _speedTest.startTesting(
-      useFastApi: true,
-      // downloadTestServer: 'http://speedtest.ftp.otenet.gr/files/test1Mb.db',
-      // uploadTestServer: 'http://speedtest.ftp.otenet.gr/',
-      fileSizeInBytes: 10 * 1024 * 1024, // 10 MB
+      useFastApi: true, // Nonaktifkan Fast API jika bermasalah
+      //   downloadTestServer: 'http://speedtest.ftp.otenet.gr/files/test1Mb.db',
+      //   uploadTestServer: 'http://speedtest.ftp.otenet.gr/',
+      fileSizeInBytes: 100000000, // Kurangi file size (100MB)
       onStarted: () {
-        if (mounted)
-          setState(() {
-            _downloadProgress = 0;
-            _uploadProgress = 0;
-          });
+        setState(() {
+          _downloadProgress = 0;
+          _uploadProgress = 0;
+        });
       },
       onCompleted: (TestResult download, TestResult upload) {
+        print(
+          '$TAG onCompleted: Download ${download.transferRate}, Upload ${upload.transferRate}',
+        );
+
         _logger.speed(
           'Complete - DL: ${download.transferRate.toStringAsFixed(2)} Mbps | '
           'UL: ${upload.transferRate.toStringAsFixed(2)} Mbps',
         );
-        if (mounted) {
-          setState(() {
-            _downloadSpeed = download.transferRate;
-            _uploadSpeed = upload.transferRate;
-            _downloadProgress = 100;
-            _uploadProgress = 100;
-            _speedUnit = download.unit == SpeedUnit.kbps ? 'Kbps' : 'Mbps';
-            _speedTestRunning = false;
-            _speedTestDone = true; // hanya flag, JANGAN complete session
-            _ping = _calculateSimulatedPing(download.transferRate);
-          });
-        }
-        // Telephony & GPS tetap jalan sampai 3 menit habis
-        _logger.speed('Speed test done. Continuing telemetry until timeout...');
+        setState(() {
+          _downloadSpeed = download.transferRate;
+          _uploadSpeed = upload.transferRate;
+          _downloadProgress = 100;
+          _uploadProgress = 100;
+          _speedUnit = download.unit == SpeedUnit.kbps ? 'Kbps' : 'Mbps';
+          _speedTestRunning = false;
+
+          // Simulate ping based on speed
+          _ping = _calculateSimulatedPing(download.transferRate);
+        });
+
+        _stopIntegratedTest();
+        // _completeTestSession();
       },
       onProgress: (double percent, TestResult data) {
+        print(
+          '$TAG onProgress: ${data.transferRate}, ${data.unit == SpeedUnit.kbps ? 'Kbps' : 'Mbps'}, ${data.type == TestType.download ? 'Download' : 'Upload'}',
+        );
+
         final type = data.type == TestType.download ? 'DOWNLOAD' : 'UPLOAD';
+        // Log setiap 20% untuk tidak spam console
         if (percent % 20 == 0 || percent == 100) {
           _logger.speed(
             '$type: ${percent.toStringAsFixed(0)}% - '
             '${data.transferRate.toStringAsFixed(2)} Mbps',
           );
         }
-        if (mounted) {
-          setState(() {
-            _speedUnit = data.unit == SpeedUnit.kbps ? 'Kbps' : 'Mbps';
-            if (data.type == TestType.download) {
-              _downloadSpeed = data.transferRate;
-              _downloadProgress = percent;
-            } else {
-              _uploadSpeed = data.transferRate;
-              _uploadProgress = percent;
-            }
-          });
-        }
+        setState(() {
+          _speedUnit = data.unit == SpeedUnit.kbps ? 'Kbps' : 'Mbps';
+          if (data.type == TestType.download) {
+            _downloadSpeed = data.transferRate;
+            _downloadProgress = percent;
+          } else {
+            _uploadSpeed = data.transferRate;
+            _uploadProgress = percent;
+          }
+        });
       },
       onDefaultServerSelectionDone: (client) {
-        _logger.speed(
-          'Server: IP ${client?.ip} | ISP ${client?.isp} | '
-          '${client?.location?.country ?? ''}',
+        print(
+          "$TAG Default server selected: IP ${client?.ip} - ISP ${client?.isp} - LOCATION ${client?.location?.country ?? ''} - ASN ${client?.asn}",
         );
-        if (mounted) {
-          setState(() {
-            _serverIp = client?.ip;
-            _serverIsp = client?.isp;
-            _serverLocation =
-                "${client?.location?.city ?? ''}, "
-                "${client?.location?.country ?? ''}";
-          });
-        }
+        _logger.speed(
+          'Default server selected: '
+          'IP: ${client?.ip ?? 'Unknown'} - '
+          'ISP: ${client?.isp ?? 'Unknown'} - '
+          '${client?.location?.country ?? 'Unknown'}',
+        );
+        setState(() {
+          _serverIp = client?.ip;
+          _serverIsp = client?.isp;
+          _serverLocation =
+              "${client?.location?.city ?? ''}, ${client?.location!.country}";
+        });
       },
-      onDownloadComplete: (TestResult data) => _logger.speed(
-        'Download done: ${data.transferRate.toStringAsFixed(2)} Mbps',
-      ),
-      onUploadComplete: (TestResult data) => _logger.speed(
-        'Upload done: ${data.transferRate.toStringAsFixed(2)} Mbps',
-      ),
+      onDownloadComplete: (TestResult data) {
+        _logger.speed(
+          'Download completed: ${data.transferRate.toStringAsFixed(2)} Mbps',
+        );
+      },
+      onUploadComplete: (TestResult data) {
+        _logger.speed(
+          'Upload completed: ${data.transferRate.toStringAsFixed(2)} Mbps',
+        );
+      },
       onError: (errorMessage, speedTestError) {
         _logger.error('Speed test error: $errorMessage');
-        if (mounted) {
-          setState(() {
-            _speedTestRunning = false;
-            _speedTestDone = true;
-          });
-        }
-        // Jangan complete — tunggu 3 menit habis
+        setState(() => _speedTestRunning = false);
       },
     );
   }
@@ -577,22 +486,18 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
     return 120.0;
   }
 
-  // ─────────────────────────────────────────────────────
-  // COMPLETE SESSION → POST DB
-  // ─────────────────────────────────────────────────────
-
   void _completeTestSession() {
-    _sessionCount++;
-    _cancelAllTimers();
+    setState(() {
+      _isTesting = false;
+      _isMonitoring = false;
+      _speedTestRunning = false;
+    });
 
-    if (mounted) {
-      setState(() {
-        _isTesting = false;
-        _isMonitoring = false;
-        _speedTestRunning = false;
-      });
-    }
+    _telephonyTimer?.cancel();
+    _sessionTimer?.cancel();
+    _speedTest.cancelTest();
 
+    // Save session results
     _saveTestSession();
     _submitCapture();
   }
@@ -606,7 +511,7 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
     final result = await _captureService.submitFullCapture(
       deviceInfo: _deviceInfo!,
       simInfo: _simInfo!,
-      cellularInfo: _cellularInfo,
+      cellularInfo: _cellularInfo, // + BARU
       sessionStartedAt: _sessionStartedAt ?? DateTime.now(),
       sessionEndedAt: DateTime.now(),
       positions: List<Position>.from(positions),
@@ -614,7 +519,7 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
       downloadSpeed: _downloadSpeed,
       uploadSpeed: _uploadSpeed,
       ping: _ping,
-      speedUnit: _speedUnit,
+      speedUnit: _speedUnit, // + BARU
       servingCell: _servingCell,
       neighbourCells: List<NeighbourCell>.from(_neighbourCells),
     );
@@ -625,6 +530,7 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
           '✅ Capture saved (ID: ${response.captureId})',
           Colors.green,
         );
+
       case CaptureFailure(:final error):
         _showSnackBar('❌ Upload failed: $error', Colors.red);
     }
@@ -643,10 +549,6 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
     );
   }
 
-  // ─────────────────────────────────────────────────────
-  // SAVE SESSION & SUMMARY
-  // ─────────────────────────────────────────────────────
-
   void _saveTestSession() {
     final session = TestSession(
       timestamp: DateTime.now(),
@@ -658,271 +560,99 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
       operatorName: _operatorName,
     );
 
-    if (mounted) {
-      setState(() {
-        _testSessions.insert(0, session);
-        if (_testSessions.length > 5) _testSessions.removeLast();
-      });
-    }
+    setState(() {
+      _testSessions.insert(0, session);
+      if (_testSessions.length > 5) {
+        _testSessions.removeLast();
+      }
+    });
 
-    _showSessionSummaryWithAutoContinue(session);
+    // Show summary
+    _showSessionSummary(session);
   }
 
-  void _showSessionSummaryWithAutoContinue(TestSession session) {
-    if (!mounted) return;
+  void _showSessionSummary(TestSession session) {
+    // final minutes = _sessionDuration.inMinutes.toString().padLeft(2, '0');
+    // final seconds = (_sessionDuration.inSeconds % 60).toString().padLeft(
+    //   2,
+    //   '0',
+    // );
 
-    _dialogCountdownTimer?.cancel();
-    _dialogAutoCloseTimer?.cancel();
-
-    final countdownNotifier = ValueNotifier<int>(5);
-
-    _dialogCountdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (countdownNotifier.value <= 1) {
-        timer.cancel();
-        countdownNotifier.value = 0;
-        return;
-      }
-      countdownNotifier.value--;
-    });
-
-    _dialogAutoCloseTimer = Timer(const Duration(seconds: 5), () {
-      if (mounted && Navigator.canPop(context)) Navigator.pop(context);
-      if (_isLooping) _startNewSession();
-    });
-
-    // addPostFrameCallback → hindari show dialog di tengah build
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        if (_isLooping) _startNewSession();
-        return;
-      }
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => _buildSummaryDialog(
-          session: session,
-          avgRssi: _calculateAverage((e) => e.rssi),
-          avgRsrq: _calculateAverage((e) => e.rsrq),
-          avgRsrp: _calculateAverage((e) => e.rsrp),
-          modeRssi: _calculateMode((e) => e.rssi),
-          modeRsrq: _calculateMode((e) => e.rsrq),
-          modeRsrp: _calculateMode((e) => e.rsrp),
-          countdownNotifier: countdownNotifier,
-        ),
+    print("Showing session summary...");
+    print(_telemetryHistory.toString());
+    _telemetryHistory.forEach((e) {
+      print(
+        "Time: ${e.timestamp}, RSRP: ${e.rsrp}, RSRQ: ${e.rsrq}, RSSI: ${e.rssi}, SNR: ${e.rssnr} Cell ID: ${e.cellId}",
+      );
+      log(
+        "\nsimInfo: ${e.simInfo.toString()},\ndeviceInfo: ${e.deviceInfo.toString()},\ncellularInfo ${e.cellularInfo.toString()},\nservingCell: ${e.servingCell.toString()}, \nneighbourCells: ${e.neighbourCells.toString()}",
       );
     });
-  }
 
-  Widget _buildSummaryDialog({
-    required TestSession session,
-    required String avgRssi,
-    required String avgRsrq,
-    required String avgRsrp,
-    required String modeRssi,
-    required String modeRsrq,
-    required String modeRsrp,
-    required ValueNotifier<int> countdownNotifier,
-  }) {
-    return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Row(
-        children: [
-          Icon(Icons.assessment, color: _primaryRed),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Sesi #$_sessionCount Selesai',
-              style: const TextStyle(fontSize: 16),
-            ),
-          ),
-          ValueListenableBuilder<int>(
-            valueListenable: countdownNotifier,
-            builder: (_, countdown, __) => Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: _primaryRed.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Text(
-                '$countdown',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: _primaryRed,
-                  fontSize: 16,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-      content: SingleChildScrollView(
-        child: Column(
+    // Cara pakai:
+    String avgRssi = _calculateAverage((e) => e.rssi);
+    String avgRsrq = _calculateAverage((e) => e.rsrq);
+    String avgRsrp = _calculateAverage((e) => e.rsrp);
+
+    String medianRssi = _calculateMode((e) => e.rssi);
+    String medianRsrq = _calculateMode((e) => e.rsrq);
+    String medianRsrp = _calculateMode((e) => e.rsrp);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.assessment, color: _primaryRed),
+            const SizedBox(width: 8),
+            const Text('Test Session Complete'),
+          ],
+        ),
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.green.withOpacity(0.2)),
-              ),
-              child: Column(
-                children: [
-                  _summaryRow(
-                    '⬇ Download',
-                    '${_downloadSpeed.toStringAsFixed(1)} $_speedUnit',
-                    Colors.green,
-                  ),
-                  _summaryRow(
-                    '⬆ Upload',
-                    '${_uploadSpeed.toStringAsFixed(1)} $_speedUnit',
-                    Colors.orange,
-                  ),
-                  _summaryRow(
-                    '⏱ Ping',
-                    '${_ping.toStringAsFixed(0)} ms',
-                    Colors.blue,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: _primaryRed.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _primaryRed.withOpacity(0.2)),
-              ),
-              child: Column(
-                children: [
-                  _summaryRow(
-                    'Samples',
-                    '${_telemetryHistory.length}',
-                    _primaryRed,
-                  ),
-                  _summaryRow('AVG RSSI', '$avgRssi dBm', _primaryRed),
-                  _summaryRow('AVG RSRQ', '$avgRsrq dB', _primaryRed),
-                  _summaryRow('AVG RSRP', '$avgRsrp dBm', _primaryRed),
-                  _summaryRow('Mode RSSI', modeRssi, Colors.grey.shade600),
-                  _summaryRow('Mode RSRQ', modeRsrq, Colors.grey.shade600),
-                  _summaryRow('Mode RSRP', modeRsrp, Colors.grey.shade600),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            if (_isLooping)
-              ValueListenableBuilder<int>(
-                valueListenable: countdownNotifier,
-                builder: (_, countdown, __) => Row(
-                  children: [
-                    Icon(Icons.loop, size: 14, color: Colors.grey.shade600),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Sesi berikutnya dalam $countdown detik...',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            // Text('Duration: $minutes:$seconds'),
+            const SizedBox(height: 8),
+            Text('Download: ${_downloadSpeed.toStringAsFixed(1)} $_speedUnit'),
+            Text('Upload: ${_uploadSpeed.toStringAsFixed(1)} $_speedUnit'),
+            Text('Ping: ${_ping.toStringAsFixed(0)} ms'),
+            const SizedBox(height: 8),
+            Text('Samples Collected: ${_telemetryHistory.length}'),
+            const SizedBox(height: 8),
+            Text('AVG RSSI: $avgRssi dBm'),
+            Text('Dominan RSSI: $medianRssi'),
+            const SizedBox(height: 8),
+            Text('AVG RSSQ: $avgRsrq dBm'),
+            Text('Dominan RSSQ: $medianRsrq'),
+            const SizedBox(height: 8),
+            Text('AVG RSCP: $avgRsrp dBm'),
+            Text('Dominan RSCP: $medianRsrp'),
           ],
         ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () {
-            _dialogCountdownTimer?.cancel();
-            _dialogAutoCloseTimer?.cancel();
-            Navigator.pop(context);
-            _stopIntegratedTest();
-          },
-          child: const Text('STOP', style: TextStyle(color: Colors.red)),
-        ),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: _primaryRed),
-          onPressed: () {
-            _dialogCountdownTimer?.cancel();
-            _dialogAutoCloseTimer?.cancel();
-            Navigator.pop(context);
-            if (_isLooping) _startNewSession();
-          },
-          child: const Text(
-            'LANJUT SEKARANG',
-            style: TextStyle(color: Colors.white),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _summaryRow(String label, String value, Color color) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
           ),
         ],
       ),
     );
   }
 
-  // ─────────────────────────────────────────────────────
-  // CALCULATIONS
-  // ─────────────────────────────────────────────────────
-
-  String _calculateAverageRssi() {
-    if (_telemetryHistory.isEmpty) return '0';
-    final sum = _telemetryHistory.map((e) => e.rssi).reduce((a, b) => a + b);
-    return (sum / _telemetryHistory.length).toStringAsFixed(0);
-  }
-
-  String _calculateAverage(int Function(dynamic) selector) {
-    if (_telemetryHistory.isEmpty) return '0';
-    final sum = _telemetryHistory.map(selector).reduce((a, b) => a + b);
-    return (sum / _telemetryHistory.length).toStringAsFixed(0);
-  }
-
-  String _calculateMode(int Function(dynamic) selector) {
-    if (_telemetryHistory.isEmpty) return '0';
-    final values = _telemetryHistory.map(selector).toList();
-    final freq = <int, int>{};
-    for (var v in values) freq[v] = (freq[v] ?? 0) + 1;
-    final maxF = freq.values.reduce((a, b) => a > b ? a : b);
-    return (freq.entries
-            .where((e) => e.value == maxF)
-            .map((e) => e.key)
-            .toList()
-          ..sort())
-        .first
-        .toStringAsFixed(0);
-  }
-
-  // ─────────────────────────────────────────────────────
-  // BUILD
-  // ─────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
+    // final minutes = _sessionDuration.inMinutes.toString().padLeft(2, '0');
+    // final seconds = (_sessionDuration.inSeconds % 60).toString().padLeft(
+    //   2,
+    //   '0',
+    // );
+
     return Scaffold(
       backgroundColor: Colors.grey[50],
       body: CustomScrollView(
         slivers: [
+          // App Bar dengan tema merah
           SliverAppBar(
             expandedHeight: 140,
             floating: true,
@@ -951,6 +681,7 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
                 ),
                 child: Stack(
                   children: [
+                    // Pattern overlay
                     Positioned(
                       top: 20,
                       right: 20,
@@ -963,6 +694,7 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
                         ),
                       ),
                     ),
+                    // Logo/Icon
                     Positioned(
                       top: 40,
                       left: 20,
@@ -975,7 +707,7 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
                             color: Colors.white.withOpacity(0.3),
                           ),
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.network_check,
                           color: Colors.white,
                           size: 30,
@@ -987,37 +719,54 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
               ),
             ),
           ),
+
+          // Main Content
           SliverPadding(
             padding: const EdgeInsets.all(16),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
+                // Network Status Card dengan tema merah
                 _buildNetworkStatusCard(),
                 const SizedBox(height: 16),
+
                 if (_simInfo != null)
+                  // Dalam widget Anda
                   SimInfoCard(
-                    simInfo: _simInfo!,
-                    primaryColor: const Color(0xFFE53935),
-                    accentColor: const Color(0xFFFF9800),
+                    simInfo: _simInfo!, // Data SIM Info dari plugin
+                    primaryColor: Color(
+                      0xFFE53935,
+                    ), // Warna merah dari tema Anda
+                    accentColor: Color(
+                      0xFFFF9800,
+                    ), // Warna orange dari tema Anda
                   ),
                 const SizedBox(height: 16),
+
                 if (_deviceInfo != null)
+                  // Dalam widget Anda
                   DeviceInfoCard(
                     deviceInfo: _deviceInfo!,
                     primaryColor: _primaryRed,
                     accentColor: _accentOrange,
                   ),
                 const SizedBox(height: 16),
+
                 if (_servingCell != null)
                   ServingCellCard(
                     servingCell: _servingCell!,
                     neighbourCells: _neighbourCells,
-                    primaryColor: const Color(0xFFE53935),
-                    accentColor: const Color(0xFFFF9800),
+                    primaryColor: Color(
+                      0xFFE53935,
+                    ), // Warna merah dari tema Anda
+                    accentColor: Color(
+                      0xFFFF9800,
+                    ), // Warna orange dari tema Anda
                     signalGoodColor: Colors.green,
                     signalFairColor: Colors.orange,
                     signalPoorColor: Colors.red,
                   ),
                 const SizedBox(height: 16),
+
                 if (_cellularInfo != null)
                   CellularInfoCard(
                     cellularInfo: _cellularInfo!,
@@ -1025,129 +774,59 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
                     accentColor: _accentOrange,
                   ),
                 const SizedBox(height: 16),
+
+                // Speed Test Card dengan tema merah
                 _buildSpeedTestCard(),
                 const SizedBox(height: 16),
+
                 _buildSignalsChartCard(),
                 const SizedBox(height: 16),
+
+                // Telemetry Card dengan tema merah
                 _buildTelemetryCard(),
                 const SizedBox(height: 16),
+
+                // Signal Quality Chart
                 if (_telemetryHistory.isNotEmpty) _buildSignalChart(),
+
+                // Previous Sessions
                 if (_testSessions.isNotEmpty) _buildPreviousSessions(),
+
                 const SizedBox(height: 16),
                 _buildDebugConsole(),
-                const SizedBox(height: 100),
+                const SizedBox(height: 16),
               ]),
             ),
           ),
         ],
       ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (_isTesting || _isLooping) _buildCountdownFab(),
-          const SizedBox(height: 8),
-          FloatingActionButton.extended(
-            onPressed: _isTesting || _isLooping
-                ? _stopIntegratedTest
-                : _startIntegratedTest,
-            backgroundColor: _isTesting || _isLooping
-                ? Colors.grey[700]
-                : _primaryRed,
-            foregroundColor: Colors.white,
-            icon: Icon(
-              _isTesting || _isLooping ? Icons.stop : Icons.play_arrow,
-              size: 24,
-            ),
-            label: Text(
-              _isTesting || _isLooping ? 'STOP TEST' : 'START TEST',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.5,
-              ),
-            ),
-            elevation: 6,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(50),
-            ),
+
+      // Floating Action Button merah
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _isTesting ? _stopIntegratedTest : _startIntegratedTest,
+        backgroundColor: _isTesting ? Colors.grey : _primaryRed,
+        foregroundColor: Colors.white,
+        icon: Icon(_isTesting ? Icons.stop : Icons.play_arrow, size: 24),
+        label: Text(
+          _isTesting ? 'STOP TEST' : 'START TEST',
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.5,
           ),
-        ],
+        ),
+        elevation: 6,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
-
-  Widget _buildCountdownFab() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.black87,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: _primaryRed,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              'SESI #$_sessionCount',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            '${(_remainingSeconds ~/ 60).toString().padLeft(2, '0')}:'
-            '${(_remainingSeconds % 60).toString().padLeft(2, '0')}',
-            style: TextStyle(
-              color: _remainingSeconds <= 30 ? Colors.orange : Colors.white,
-              fontWeight: FontWeight.bold,
-              fontFamily: 'monospace',
-              fontSize: 20,
-            ),
-          ),
-          const SizedBox(width: 8),
-          if (_isTesting)
-            TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0.3, end: 1.0),
-              duration: const Duration(milliseconds: 700),
-              builder: (_, v, child) => Opacity(opacity: v, child: child),
-              child: Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: Colors.green,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  // ─────────────────────────────────────────────────────
-  // WIDGET BUILDERS
-  // ─────────────────────────────────────────────────────
 
   Widget _buildNetworkStatusCard() {
     final uniqueCellIds = _telemetryHistory
         .map((e) => e.cellId)
         .toSet()
         .toList();
+
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -1212,8 +891,12 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
               ],
             ),
             const SizedBox(height: 20),
+
+            // Signal Strength Indicator
             _buildSignalIndicator(),
             const SizedBox(height: 8),
+
+            // Network Info Grid
             GridView.count(
               crossAxisCount: 2,
               shrinkWrap: true,
@@ -1225,8 +908,7 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
                 _buildInfoTile(
                   'LATLONG',
                   positions.isNotEmpty
-                      ? '${positions.last.latitude.toStringAsFixed(5)}, '
-                            '${positions.last.longitude.toStringAsFixed(5)}'
+                      ? '${positions.last.latitude.toStringAsFixed(5)}, ${positions.last.longitude.toStringAsFixed(5)}'
                       : 'N/A',
                   Icons.location_city,
                   _primaryRed,
@@ -1278,6 +960,8 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
       signalColor = Colors.orange[800]!;
       signalText = 'WEAK';
       signalIcon = Icons.signal_cellular_alt_1_bar;
+    } else {
+      signalIcon = Icons.signal_cellular_0_bar;
     }
 
     return Column(
@@ -1320,6 +1004,8 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
           ],
         ),
         const SizedBox(height: 16),
+
+        // Signal Bars dengan style modern
         Container(
           height: 60,
           padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -1329,6 +1015,7 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
           ),
           child: Row(
             children: [
+              // Signal value
               SizedBox(
                 width: 80,
                 child: Center(
@@ -1358,14 +1045,17 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
                   ),
                 ),
               ),
+
+              // Signal bars
               Expanded(
                 child: Container(
                   margin: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: List.generate(5, (index) {
-                      final height = 20 + (index * 8.0);
-                      final isActive = index <= _getSignalBarsCount();
+                      double height = 20 + (index * 8.0);
+                      bool isActive = index <= _getSignalBarsCount();
+
                       return Expanded(
                         child: Container(
                           margin: const EdgeInsets.symmetric(horizontal: 2),
@@ -1388,6 +1078,8 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
             ],
           ),
         ),
+
+        // Signal Details
         const SizedBox(height: 16),
         Container(
           padding: const EdgeInsets.all(12),
@@ -1483,6 +1175,7 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
     Color color,
   ) {
     return Container(
+      //   height: 50,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1546,10 +1239,13 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
+          gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Colors.white, Color(0xFFFFEBEE)],
+            colors: [
+              Colors.white,
+              Color(0xFFFFEBEE), // Light red background
+            ],
           ),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: _primaryRed.withOpacity(0.1)),
@@ -1611,19 +1307,23 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
               ],
             ),
             const SizedBox(height: 20),
+
+            // Download Speed
             _buildSpeedItem(
               label: 'DOWNLOAD',
               icon: Icons.arrow_downward_rounded,
-              color: const Color(0xFF4CAF50),
+              color: const Color(0xFF4CAF50), // Green for download
               speed: _downloadSpeed,
               progress: _downloadProgress,
               isActive: _speedTestRunning && _downloadProgress < 100,
             ),
             const SizedBox(height: 20),
+
+            // Upload Speed
             _buildSpeedItem(
               label: 'UPLOAD',
               icon: Icons.arrow_upward_rounded,
-              color: _accentOrange,
+              color: _accentOrange, // Orange for upload
               speed: _uploadSpeed,
               progress: _uploadProgress,
               isActive:
@@ -1632,6 +1332,8 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
                   _uploadProgress < 100,
             ),
             const SizedBox(height: 20),
+
+            // Ping & Server Info
             _buildPingAndServerInfo(),
           ],
         ),
@@ -1701,12 +1403,15 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
             ],
           ),
           const SizedBox(height: 16),
+
+          // Speed display with progress
           Row(
             children: [
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Progress Bar
                     LinearProgressIndicator(
                       value: progress / 100,
                       backgroundColor: Colors.grey.shade200,
@@ -1795,6 +1500,7 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
       ),
       child: Row(
         children: [
+          // Ping
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1833,12 +1539,16 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
               ],
             ),
           ),
+
+          // Vertical Divider
           Container(
             width: 1,
             height: 60,
             color: Colors.grey.shade300,
             margin: const EdgeInsets.symmetric(horizontal: 16),
           ),
+
+          // Server Info
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1891,7 +1601,13 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
     return 'POOR';
   }
 
-  Widget _buildDebugConsole() => SizedBox(height: 400, child: ConsoleLogger());
+  Widget _buildDebugConsole() {
+    return Container(
+      height: 400,
+      // padding: const EdgeInsets.all(16),
+      child: ConsoleLogger(),
+    );
+  }
 
   Widget _buildTelemetryCard() {
     return Card(
@@ -1900,10 +1616,13 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
+          gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Colors.white, Color(0xFFFCE4EC)],
+            colors: [
+              Colors.white,
+              Color(0xFFFCE4EC), // Light pink
+            ],
           ),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: _primaryRed.withOpacity(0.1)),
@@ -1936,11 +1655,55 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
                   ),
                 ),
                 const Spacer(),
-                _buildLiveChip(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _isMonitoring
+                        ? Colors.green.withOpacity(0.1)
+                        : Colors.grey.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _isMonitoring
+                          ? Colors.green.withOpacity(0.3)
+                          : Colors.grey.withOpacity(0.3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _isMonitoring
+                            ? Icons.wifi_tethering
+                            : Icons.wifi_tethering_off,
+                        size: 14,
+                        color: _isMonitoring ? Colors.green : Colors.grey,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _isMonitoring ? 'LIVE' : 'OFF',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: _isMonitoring ? Colors.green : Colors.grey,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 20),
+
+            // Session Timer
+            // _buildSessionTimer(minutes, seconds),
+            // const SizedBox(height: 20),
+
+            // Telemetry Stats
             if (_telemetryHistory.isNotEmpty) _buildTelemetryStats(),
+
+            // Live Data Stream
             if (_isMonitoring) _buildLiveDataStream(),
           ],
         ),
@@ -1955,10 +1718,13 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
+          gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Colors.white, Color(0xFFFCE4EC)],
+            colors: [
+              Colors.white,
+              Color(0xFFFCE4EC), // Light pink
+            ],
           ),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: _primaryRed.withOpacity(0.1)),
@@ -1991,13 +1757,50 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
                   ),
                 ),
                 const Spacer(),
-                _buildLiveChip(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _isMonitoring
+                        ? Colors.green.withOpacity(0.1)
+                        : Colors.grey.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _isMonitoring
+                          ? Colors.green.withOpacity(0.3)
+                          : Colors.grey.withOpacity(0.3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _isMonitoring
+                            ? Icons.wifi_tethering
+                            : Icons.wifi_tethering_off,
+                        size: 14,
+                        color: _isMonitoring ? Colors.green : Colors.grey,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _isMonitoring ? 'LIVE' : 'OFF',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: _isMonitoring ? Colors.green : Colors.grey,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 20),
+
             AspectRatio(
               aspectRatio: 12 / 9,
-              child: ScatterChartSignalPage(data: _telemetryHistory),
+              child: ScatterChartSignalPage(data: _telemetryHistory ?? []),
             ),
           ],
         ),
@@ -2005,34 +1808,91 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
     );
   }
 
-  Widget _buildLiveChip() {
+  Widget _buildSessionTimer(String minutes, String seconds) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: _isMonitoring
-            ? Colors.green.withOpacity(0.1)
-            : Colors.grey.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
+        color: _isTesting
+            ? Color(0xFFFFF8E1)
+            : Colors.grey.shade100, // Light orange when testing
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: _isMonitoring
-              ? Colors.green.withOpacity(0.3)
-              : Colors.grey.withOpacity(0.3),
+          color: _isTesting
+              ? _accentOrange.withOpacity(0.3)
+              : Colors.grey.shade300,
         ),
+        boxShadow: _isTesting
+            ? [
+                BoxShadow(
+                  color: _accentOrange.withOpacity(0.1),
+                  blurRadius: 10,
+                  spreadRadius: 2,
+                ),
+              ]
+            : null,
       ),
       child: Row(
         children: [
-          Icon(
-            _isMonitoring ? Icons.wifi_tethering : Icons.wifi_tethering_off,
-            size: 14,
-            color: _isMonitoring ? Colors.green : Colors.grey,
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: _isTesting ? _accentOrange : Colors.grey,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              _isTesting ? Icons.timer : Icons.timer_off,
+              color: Colors.white,
+              size: 24,
+            ),
           ),
-          const SizedBox(width: 4),
-          Text(
-            _isMonitoring ? 'LIVE' : 'OFF',
-            style: TextStyle(
-              fontSize: 10,
-              color: _isMonitoring ? Colors.green : Colors.grey,
-              fontWeight: FontWeight.bold,
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _isTesting ? 'TEST SESSION ACTIVE' : 'READY FOR TESTING',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: _isTesting ? _accentOrange : Colors.grey.shade600,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _isTesting
+                      ? 'Collecting network data...'
+                      : 'Start a session to monitor network',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: _isTesting ? Colors.black87 : Colors.grey.shade700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: _isTesting
+                  ? _accentOrange.withOpacity(0.1)
+                  : Colors.grey.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _isTesting
+                    ? _accentOrange.withOpacity(0.3)
+                    : Colors.grey.withOpacity(0.3),
+              ),
+            ),
+            child: Text(
+              '$minutes:$seconds',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'monospace',
+                color: _isTesting ? _accentOrange : Colors.grey.shade600,
+              ),
             ),
           ),
         ],
@@ -2041,20 +1901,22 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
   }
 
   Widget _buildTelemetryStats() {
-    final last = _telemetryHistory.first;
+    final lastSnapshot = _telemetryHistory.first;
+    final samples = _telemetryHistory.length;
+
     return Column(
       children: [
         Row(
           children: [
             _buildStatTile(
               'SAMPLES',
-              '${_telemetryHistory.length}',
+              samples.toString(),
               Icons.data_usage,
               _primaryRed,
             ),
             _buildStatTile(
               'LAST RSCP',
-              '${last.rsrp}',
+              '${lastSnapshot.rsrp}',
               Icons.signal_cellular_alt,
               _primaryRed,
             ),
@@ -2080,7 +1942,7 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
               Icon(Icons.update, size: 12, color: _primaryRed),
               const SizedBox(width: 6),
               Text(
-                'Last Update: ${DateFormat('HH:mm:ss').format(last.timestamp)}',
+                'Last Update: ${DateFormat('HH:mm:ss').format(lastSnapshot.timestamp)}',
                 style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
               ),
             ],
@@ -2088,6 +1950,60 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
         ),
       ],
     );
+  }
+
+  String _calculateAverageRssi() {
+    if (_telemetryHistory.isEmpty) return '0';
+    final sum = _telemetryHistory.map((e) => e.rssi).reduce((a, b) => a + b);
+    return (sum / _telemetryHistory.length).toStringAsFixed(0);
+  }
+
+  String _calculateAverage(int Function(dynamic) selector) {
+    if (_telemetryHistory.isEmpty) return '0';
+    final sum = _telemetryHistory.map(selector).reduce((a, b) => a + b);
+    return (sum / _telemetryHistory.length).toStringAsFixed(0);
+  }
+
+  String _calculateMedian(int Function(dynamic) selector) {
+    if (_telemetryHistory.isEmpty) return '0';
+
+    final values = _telemetryHistory.map(selector).toList()..sort();
+    final length = values.length;
+    final middleIndex = length ~/ 2;
+
+    if (length % 2 == 1) {
+      return values[middleIndex].toStringAsFixed(0);
+    }
+
+    final median = (values[middleIndex - 1] + values[middleIndex]) / 2;
+    return median.toStringAsFixed(0);
+  }
+
+  String _calculateMode(int Function(dynamic) selector) {
+    if (_telemetryHistory.isEmpty) return '0';
+
+    final values = _telemetryHistory.map(selector).toList();
+    print('SELECTOR items ${values.toString()} ');
+
+    // Hitung frekuensi setiap nilai
+    final frequencyMap = <int, int>{};
+    for (var value in values) {
+      frequencyMap[value] = (frequencyMap[value] ?? 0) + 1;
+    }
+
+    // Cari frekuensi maksimal
+    int maxFrequency = frequencyMap.values.reduce((a, b) => a > b ? a : b);
+
+    // Ambil semua nilai dengan frekuensi maksimal
+    final modes =
+        frequencyMap.entries
+            .where((entry) => entry.value == maxFrequency)
+            .map((entry) => entry.key)
+            .toList()
+          ..sort();
+
+    // Return nilai terkecil jika ada beberapa modus
+    return modes.first.toStringAsFixed(0);
   }
 
   Widget _buildStatTile(
@@ -2196,7 +2112,10 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: _telemetryHistory.take(15).length,
-            itemBuilder: (_, i) => _buildLiveDataPoint(_telemetryHistory[i]),
+            itemBuilder: (context, index) {
+              final data = _telemetryHistory[index];
+              return _buildLiveDataPoint(data);
+            },
           ),
         ),
       ],
@@ -2204,22 +2123,24 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
   }
 
   Widget _buildLiveDataPoint(TelephonySnapshot data) {
-    final color = data.rsrp >= -85
+    final Color pointColor = data.rsrp >= -85
         ? Colors.green
         : data.rsrp >= -95
         ? Colors.orange
         : Colors.red;
+
     return Container(
       width: 60,
       margin: const EdgeInsets.only(right: 8),
       child: Column(
         children: [
+          // Value
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: pointColor.withOpacity(0.1),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: color.withOpacity(0.2)),
+              border: Border.all(color: pointColor.withOpacity(0.2)),
             ),
             child: Column(
               children: [
@@ -2228,7 +2149,7 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: color,
+                    color: pointColor,
                   ),
                 ),
                 Text(
@@ -2239,6 +2160,7 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
             ),
           ),
           const SizedBox(height: 4),
+          // Time
           Text(
             DateFormat('HH:mm').format(data.timestamp),
             style: TextStyle(fontSize: 8, color: Colors.grey.shade500),
@@ -2285,7 +2207,7 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    'Last ${_telemetryHistory.take(20).length} samples',
+                    'Last  samples',
                     style: TextStyle(
                       fontSize: 10,
                       color: _primaryRed,
@@ -2301,21 +2223,24 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 itemCount: _telemetryHistory.take(20).length,
-                itemBuilder: (_, index) {
+                itemBuilder: (context, index) {
                   final data = _telemetryHistory[index];
-                  final h = ((data.rsrp + 140) / 90 * 80).clamp(10.0, 80.0);
+                  final height = ((data.rsrp + 140) / 90 * 80).clamp(
+                    10.0,
+                    80.0,
+                  );
                   return Container(
                     width: 4,
                     margin: const EdgeInsets.only(right: 2),
                     decoration: BoxDecoration(
-                      color: h > 60
+                      color: height > 60
                           ? Colors.green
-                          : h > 40
+                          : height > 40
                           ? Colors.orange
                           : Colors.red,
                       borderRadius: BorderRadius.circular(2),
                     ),
-                    height: h,
+                    height: height,
                   );
                 },
               ),
@@ -2324,7 +2249,6 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
             SizedBox(
               height: 100,
               child: CustomPaint(
-                size: const Size(double.infinity, 100),
                 painter: SignalChartPainter(
                   data: _telemetryHistory.take(20).toList(),
                   primaryColor: _primaryRed,
@@ -2385,7 +2309,9 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
               ],
             ),
             const SizedBox(height: 16),
-            ..._testSessions.take(3).map(_buildSessionItem),
+            ..._testSessions
+                .take(3)
+                .map((session) => _buildSessionItem(session)),
           ],
         ),
       ),
@@ -2403,6 +2329,7 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
       ),
       child: Row(
         children: [
+          // Date/Time
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -2519,8 +2446,7 @@ class _IntegratedNetworkDashboardState extends State<IntegratedNetworkDashboard>
   }
 }
 
-// ── Custom Painter ─────────────────────────────────────────
-
+// Custom Painter untuk chart signal
 class SignalChartPainter extends CustomPainter {
   final List<TelephonySnapshot> data;
   final Color primaryColor;
@@ -2531,7 +2457,7 @@ class SignalChartPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (data.length < 2) return;
 
-    final linePaint = Paint()
+    final paint = Paint()
       ..color = primaryColor
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
@@ -2541,26 +2467,37 @@ class SignalChartPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     final points = <Offset>[];
+
+    // Convert data to points
     for (int i = 0; i < data.length; i++) {
       final x = (size.width / (data.length - 1)) * i;
-      final ny = ((data[i].rsrp + 140) / 90 * size.height).clamp(
+      // Normalize RSRP to y coordinate (-140 to -50 range to 0-size.height)
+      final normalizedY = ((data[i].rsrp + 140) / 90 * size.height).clamp(
         0.0,
         size.height,
       );
-      points.add(Offset(x, size.height - ny));
+      final y = size.height - normalizedY;
+      points.add(Offset(x, y));
     }
 
-    final path = Path()..moveTo(points.first.dx, size.height);
-    for (final p in points) path.lineTo(p.dx, p.dy);
+    // Draw filled area
+    final path = Path();
+    path.moveTo(points.first.dx, size.height);
+    for (final point in points) {
+      path.lineTo(point.dx, point.dy);
+    }
     path.lineTo(points.last.dx, size.height);
     path.close();
     canvas.drawPath(path, fillPaint);
 
+    // Draw line
     for (int i = 0; i < points.length - 1; i++) {
-      canvas.drawLine(points[i], points[i + 1], linePaint);
+      canvas.drawLine(points[i], points[i + 1], paint);
     }
-    for (final p in points) {
-      canvas.drawCircle(p, 3, Paint()..color = primaryColor);
+
+    // Draw points
+    for (final point in points) {
+      canvas.drawCircle(point, 3, Paint()..color = primaryColor);
     }
   }
 
